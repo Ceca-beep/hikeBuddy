@@ -9,7 +9,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { API_BASE, API_HEADERS } from './api';
+import { API_BASE, API_HEADERS } from './Api';
 
 const DIFFICULTY_COLORS = {
     Beginner:     '#4ade80',

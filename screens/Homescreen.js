@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar } from 'react-native-calendars';
-import { API_BASE, API_HEADERS } from './api';
+import { API_BASE, API_HEADERS } from './Api';
 
 const DIFFICULTY_OPTIONS = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 const FITNESS_OPTIONS    = ['Low', 'Medium', 'High', 'Athlete'];
