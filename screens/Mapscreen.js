@@ -7,6 +7,8 @@ import {
     SafeAreaView,
     Dimensions,
     ActivityIndicator,
+    Modal,
+    TextInput,
 } from 'react-native';
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 
@@ -66,6 +68,10 @@ export default function Mapscreen({ route, navigation }) {
     const [region, setRegion] = useState(null);
     const [selectedPing, setSelectedPing] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [tempPing, setTempPing] = useState(null);
+    const [isAddingPing, setIsAddingPing] = useState(false);
+    const [dangerType, setDangerType] = useState('');
+    const [customDetail, setCustomDetail] = useState('');
 
     useEffect(() => {
         if (trail?.route_path) {
@@ -85,6 +91,44 @@ export default function Mapscreen({ route, navigation }) {
 
     const startPoint = routeCoords[0];
     const endPoint = routeCoords[routeCoords.length - 1];
+    const handleMapPress = (e) => {
+        setTempPing(e.nativeEvent.coordinate);
+        setIsAddingPing(true);
+    };
+
+    const submitNewPing = async () => {
+        const finalType = dangerType === 'Custom' ? 'Custom' : dangerType;
+        const payload = {
+            "type": dangerType === 'Custom' ? 'Danger' : dangerType,
+            "lat": tempPing.latitude,
+            "lng": tempPing.longitude,
+            "description": customDetail
+        };
+
+        try {
+            const res = await fetch('https://summarisable-subarticulative-queenie.ngrok-free.dev/pings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                },
+                body: JSON.stringify(payload),
+            });
+            if (res.ok) {
+                setIsAddingPing(false);
+                setTempPing(null);
+                setDangerType('');
+                setCustomDetail('');
+                alert('Danger reported!');
+            }else {
+                const errorData = await res.json();
+                alert('Server error: ' + (errorData.detail || 'Unknown error'));
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Network error - check your connection');
+        }
+    };
 
     if (loading || !region) {
         return (
@@ -103,6 +147,7 @@ export default function Mapscreen({ route, navigation }) {
                 initialRegion={region}
                 showsUserLocation
                 showsCompass
+                onLongPress={handleMapPress}
             >
                 {/* Trail route line */}
                 {routeCoords.length > 0 && (
@@ -142,8 +187,45 @@ export default function Mapscreen({ route, navigation }) {
                         onPress={() => setSelectedPing(ping)}
                     />
                 ))}
-            </MapView>
+                {/*temp marker*/}
+                {tempPing && <Marker coordinate={tempPing} pinColor="yellow" />}
 
+            </MapView>
+            <Modal visible={isAddingPing} transparent animationType="fade">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Report Danger</Text>
+                        <View style={styles.chipRow}>
+                            {['Bear', 'Viper', 'Wolf', 'Custom'].map(t => (
+                                <TouchableOpacity
+                                    key={t}
+                                    style={[styles.chip, dangerType === t && styles.chipActive]}
+                                    onPress={() => setDangerType(t)}
+                                >
+                                    <Text style={[styles.chipText, dangerType === t && styles.chipTextActive]}>{t}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        <TextInput
+                            style={[styles.textInput, { height: 80, textAlignVertical: 'top' }]} // Înălțime mai mare
+                         placeholder="Ex: The bridge over the river is destroyed..."
+                            placeholderTextColor="rgba(255,255,255,0.4)"
+                            value={customDetail}
+                            onChangeText={setCustomDetail}
+                            multiline={true}
+                            numberOfLines={3}
+                        />
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setIsAddingPing(false); setTempPing(null); }}>
+                                <Text style={styles.cancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.confirmBtn} onPress={submitNewPing}>
+                                <Text style={styles.confirmText}>Submit</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
             {/* Back button + trail name */}
             <SafeAreaView style={styles.topOverlay}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => navigation?.goBack()}>
@@ -171,7 +253,13 @@ export default function Mapscreen({ route, navigation }) {
                     <Text style={styles.pingDesc}>{selectedPing.description}</Text>
                     {selectedPing.date && (
                         <Text style={styles.pingDate}>
-                            {new Date(selectedPing.date).toLocaleDateString()}
+                            {new Date(selectedPing.date).toLocaleString('ro-RO', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            })}
                         </Text>
                     )}
                 </View>
@@ -301,5 +389,44 @@ const styles = StyleSheet.create({
         width: 1,
         height: 30,
         backgroundColor: 'rgba(255,255,255,0.15)',
+    },
+
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 15 },
+    chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+    chipActive: { backgroundColor: '#f8c8c8', borderColor: '#f8c8c8' },
+    chipText: { color: 'white', fontSize: 13 },
+    chipTextActive: { color: '#1e3a2a', fontWeight: '700' },
+    modalButtons: { flexDirection: 'row', gap: 10 },
+    cancelBtn: { flex: 1, padding: 15, alignItems: 'center' },
+    cancelText: { color: 'rgba(255,255,255,0.5)' },
+    confirmBtn: { flex: 2, backgroundColor: '#f8c8c8', padding: 15, borderRadius: 10, alignItems: 'center' },
+    confirmText: { color: '#1e3a2a', fontWeight: '700' },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        justifyContent: 'center',
+        padding: 20
+    },
+    modalContent: {
+        backgroundColor: '#1e3a2a',
+        borderRadius: 20,
+        padding: 25,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)'
+    },
+    modalTitle: {
+        color: 'white',
+        fontSize: 20,
+        fontWeight: '700',
+        marginBottom: 20,
+        textAlign: 'center'
+    },
+    textInput: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 12,
+        padding: 15,
+        color: 'white',
+        fontSize: 16,
+        marginBottom: 20
     },
 });
