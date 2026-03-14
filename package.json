@@ -9,11 +9,19 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.3",
+    "@react-navigation/native": "^7.1.33",
+    "@react-navigation/native-stack": "^7.14.5",
     "body-parser": "^2.2.2",
     "cors": "^2.8.6",
     "expo": "^54.0.0",
+    "expo-linear-gradient": "~15.0.8",
     "express": "^5.2.1",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-web": "^0.21.0"
   }
 }
