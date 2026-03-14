@@ -65,7 +65,7 @@ export default function SignUpScreen({ navigation }) {
             return;
         }
 
-        const API_URL = 'https://summarisable-subarticulative-queenie.ngrok-free.dev';
+        const API_URL = 'https://summarisable-subarticulative-queenie.ngrok-free.dev/register';
 
         try {
             const response = await fetch(API_URL, {
@@ -77,12 +77,12 @@ export default function SignUpScreen({ navigation }) {
                 body: JSON.stringify({
                     "first_name": firstName,
                     "last_name": lastName,
-                    "email": email,
+                    "email": email.trim().toLowerCase(),
                     "password": password,
                     "age": parseInt(age) || 0,
-                    "weight": parseFloat(weight) || 0,
-                    "height": parseFloat(height) || 0,
-                    "sex": sex
+                    "weight": parseInt(weight) || 0,
+                    "height": parseInt(height) || 0,
+                    "sex": sex || "Other"
                 }),
             });
             const data = await response.json();
@@ -382,8 +382,4 @@ const styles = StyleSheet.create({
     buttonRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
     backBtn: { flex: 1, height: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.1)' },
     backBtnText: { color: 'white', fontWeight: '600', fontSize: 15 },
-<<<<<<< HEAD
 });
-=======
-});
->>>>>>> b7573015126dfca5d40e67a9acf1861e36ee79fa
