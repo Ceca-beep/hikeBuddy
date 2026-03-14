@@ -4,9 +4,8 @@ import trails as trail_service
 import packing as packing_service
 import hashlib
 import uuid
-import supabase
 from pydantic import BaseModel, EmailStr
-from supabase import create_client, Client
+from database import get_supabase
 
 app = FastAPI(title="Hike Buddy API")
 
@@ -73,8 +72,7 @@ async def register_from_json(data: RegistrationJSON):
         }
 
         # 2. Push to Supabase
-        response = supabase.table("users").insert(db_payload).execute()
-
+        response = get_supabase().table("users").insert(db_payload).execute()
         return {
             "status": "success",
             "message": f"User {data.first_name} created successfully!",
