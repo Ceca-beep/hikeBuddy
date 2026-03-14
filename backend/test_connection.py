@@ -1,27 +1,17 @@
+# test_connection.py
 import os
 from dotenv import load_dotenv
 from supabase import create_client
 
-# 1. Load .env
 load_dotenv()
 
-url = os.getenv("SUPABASE_URL")
-key = os.getenv("SUPABASE_KEY")
+print("SUPABASE_URL:", os.getenv("SUPABASE_URL"))
+print("SUPABASE_KEY:", os.getenv("SUPABASE_KEY")[:20] if os.getenv("SUPABASE_KEY") else "None")
 
-print(f"--- 📡 Testing SDK Connection ---")
-print(f"URL: {url}")
+print("Connecting...")
+client = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
-try:
-    # 2. Initialize the client
-    supabase = create_client(url, key)
-    
-    # 3. Try to pull data from your 'trails' table
-    # Even if the table is empty, this should return a 200 OK
-    response = supabase.table("trails").select("*").limit(1).execute()
-    
-    print("✅ SUCCESS: Your Python script is talking to Supabase!")
-    print(f"Data received: {response.data}")
+print("Querying...")
+result = client.table("trails").select("*").limit(2).execute()
 
-except Exception as e:
-    print(f"❌ ERROR: Could not connect.")
-    print(f"Details: {e}")
+print("Success! Got", len(result.data), "trails")

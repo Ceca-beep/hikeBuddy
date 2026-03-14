@@ -2,57 +2,22 @@ import httpx
 import os
 from dotenv import load_dotenv
 from fastapi.concurrency import run_in_threadpool
-from supabase import create_client
+from database import get_supabase
 
 load_dotenv()
 
 WAYMARKED_BASE = "https://hiking.waymarkedtrails.org/api/v1"
-print("WAYMARKED_BASE:", WAYMARKED_BASE)
 
-supabase_client = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_KEY")
-)
+# --- Supabase ---
+def _get_db_trails():
+    supabase = get_supabase()
+    return supabase.table("trails").select("*").execute().data
 
-# --- Supabase Database ---
-def get_trails_from_db():
-    response = supabase_client.table("trails").select("*").execute()
-    return response.data
+def _submit_db_trail(trail_data: dict):
+    supabase = get_supabase()
+    return supabase.table("trails").insert(trail_data).execute().data
 
-from fastapi import FastAPI, HTTPException
-import trails as trail_service
-import packing as packing_service
-
-app = FastAPI(title="Hike Buddy API")
-
-# --- Trail Endpoints ---
-
-@app.get("/trails")
-async def get_trails(query: str = None, lat: float = None, lon: float = None):
-    return await trail_service.get_all_trails(query, lat, lon)
-
-@app.get("/trails/{trail_id}")
-async def get_trail_detail(trail_id: str):
-    return await trail_service.get_trail_detail_from_api(trail_id)
-
-@app.post("/trails/submit")
-async def submit_trail(trail_data: dict):
-    return await trail_service.submit_trail(trail_data)
-
-# --- Packing List Endpoint ---
-
-@app.get("/packing-list")
-def get_packing_list(duration: float, weather: str, terrain: str):
-    gear = packing_service.generate_packing_list(duration, weather, terrain)
-    return {"gear": gear}
-
-# --- Health Check ---
-
-@app.get("/")
-def root():
-    return {"status": "Hike Buddy API is running"}
-
-# --- Waymarked Trails API ---
+# --- Waymarked API ---
 async def get_trails_from_api(query: str = None, lat: float = None, lon: float = None):
     params = {"limit": 20}
     if query:
@@ -60,22 +25,23 @@ async def get_trails_from_api(query: str = None, lat: float = None, lon: float =
     if lat and lon:
         params["lat"] = lat
         params["lon"] = lon
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"{WAYMARKED_BASE}/list", params=params)
-        response.raise_for_status()
-        data = response.json()
-
-    trails = []
-    for item in data.get("results", []):
-        trails.append({
-            "id": item.get("id"),
-            "name": item.get("name"),
-            "source": "waymarked",
-            "lat": item.get("lat"),
-            "lon": item.get("lon"),
-        })
-    return trails
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{WAYMARKED_BASE}/list", params=params)
+            response.raise_for_status()
+            data = response.json()
+        return [
+            {
+                "id": item.get("id"),
+                "name": item.get("name"),
+                "source": "waymarked",
+                "lat": item.get("lat"),
+                "lon": item.get("lon"),
+            }
+            for item in data.get("results", [])
+        ]
+    except:
+        return []
 
 async def get_trail_detail_from_api(trail_id: str):
     try:
@@ -86,13 +52,11 @@ async def get_trail_detail_from_api(trail_id: str):
     except:
         return {"error": "API unavailable", "id": trail_id}
 
-# --- Merge Both Sources ---
+# --- Merge ---
 async def get_all_trails(query: str = None, lat: float = None, lon: float = None):
-    try:
-        api_trails = await get_trails_from_api(query, lat, lon)
-    except:
-        api_trails = []
-
-    db_trails = await run_in_threadpool(get_trails_from_db)
-
+    api_trails = await get_trails_from_api(query, lat, lon)
+    db_trails = await run_in_threadpool(_get_db_trails)
     return api_trails + db_trails
+
+async def submit_trail(trail_data: dict):
+    return await run_in_threadpool(lambda: _submit_db_trail(trail_data))
