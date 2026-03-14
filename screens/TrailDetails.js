@@ -201,7 +201,9 @@ export default function TrailDetails({ route, navigation }) {
 
                 {/* Start Hike Button */}
                 <View style={styles.footer}>
-                    <TouchableOpacity style={styles.startBtn} activeOpacity={0.9}>
+                    <TouchableOpacity style={styles.startBtn} activeOpacity={0.9} onPress={() => navigation.navigate('Mapscreen', {
+                        trail: trail,
+                        pings: PLACEHOLDER_PINGS})}>
                         <Text style={styles.startBtnText}>Start Hike</Text>
                     </TouchableOpacity>
                 </View>
