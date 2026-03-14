@@ -64,16 +64,25 @@ export default function SignUpScreen({ navigation }) {
             alert('Passwords do not match');
             return;
         }
+
+        const API_URL = 'https://summarisable-subarticulative-queenie.ngrok-free.dev';
+
         try {
-            const response = await fetch('http://172.20.10.2:3000/signup', {
+            const response = await fetch(API_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true' // Bypass pagină ngrok
+                },
                 body: JSON.stringify({
-                    firstName, lastName, email, password,
-                    age: parseInt(age),
-                    weight: parseFloat(weight),
-                    height: parseFloat(height),
-                    sex,
+                    "first_name": firstName,
+                    "last_name": lastName,
+                    "email": email,
+                    "password": password,
+                    "age": parseInt(age) || 0,
+                    "weight": parseFloat(weight) || 0,
+                    "height": parseFloat(height) || 0,
+                    "sex": sex
                 }),
             });
             const data = await response.json();

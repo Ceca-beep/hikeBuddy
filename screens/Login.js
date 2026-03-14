@@ -19,10 +19,18 @@ export default function LoginScreen({ navigation }) {
 
     const handleLogin = async () => {
         try {
-            const response = await fetch('http://172.20.10.2:3000/login', {
+            const NGROK_URL = 'https://summarisable-subarticulative-queenie.ngrok-free.dev';
+
+            const response = await fetch(`${NGROK_URL}/login`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    email: email,
+                    password: password
+                }),
             });
             const data = await response.json();
             if (response.ok) {
