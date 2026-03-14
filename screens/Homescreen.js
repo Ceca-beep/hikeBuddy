@@ -193,7 +193,6 @@ export default function HomeScreen({ navigation }) {
                 {/* Header */}
                 <View style={styles.header}>
                     <View>
-                        <Text style={styles.greeting}>Hello!</Text>
                         <Text style={styles.headerTitle}>Where are we hiking?</Text>
                     </View>
                     <View style={styles.avatarCircle}>
