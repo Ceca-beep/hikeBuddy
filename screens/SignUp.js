@@ -116,8 +116,7 @@ export default function SignUpScreen({ navigation }) {
                             <Text style={styles.label}>Password</Text>
                             <View style={styles.passwordWrapper}>
                                 <TextInput
-                                    style={[styles.input, { flex: 1, borderWidth: 0 , height: '100%'}]}
-                                    placeholder="Create a password"
+                                    style={[styles.input, { flex: 1, borderWidth: 0, height: '100%', backgroundColor: 'transparent', paddingHorizontal: 0}]}                                    placeholder="Create a password"
                                     placeholderTextColor="rgba(255,255,255,0.5)"
                                     value={password}
                                     onChangeText={setPassword}

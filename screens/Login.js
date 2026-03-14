@@ -112,7 +112,9 @@ export default function LoginScreen({ navigation }) {
                             <Text style={styles.forgotText}>Forgot your password?</Text>
                         </TouchableOpacity>
                     </View>
-
+                    <TouchableOpacity onPress={() => navigation?.navigate('Home')}>
+                        <Text style={styles.skipText}>Skip for now</Text>
+                    </TouchableOpacity>
                     {/* Footer */}
                     <View style={styles.footer}>
                         <Text style={styles.footerText}>New here? </Text>
@@ -159,6 +161,13 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 18,
         fontWeight: '700',
+    },
+    skipText: {
+        color: 'rgba(255,255,255,0.4)',
+        fontSize: 13,
+        textAlign: 'center',
+        marginTop: 8,
+        textDecorationLine: 'underline',
     },
     logoSection: {
         alignItems: 'center',
