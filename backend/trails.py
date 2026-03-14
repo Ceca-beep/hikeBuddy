@@ -1,16 +1,58 @@
 import httpx
 import os
 from dotenv import load_dotenv
-from sqlalchemy.orm import Session
-from models import Trail
+from fastapi.concurrency import run_in_threadpool
+from supabase import create_client
 
 load_dotenv()
 
-WAYMARKED_BASE = os.getenv("WAYMARKED_BASE_URL")
+WAYMARKED_BASE = "https://hiking.waymarkedtrails.org/api/v1"
+print("WAYMARKED_BASE:", WAYMARKED_BASE)
 
+supabase_client = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_KEY")
+)
+
+# --- Supabase Database ---
+def get_trails_from_db():
+    response = supabase_client.table("trails").select("*").execute()
+    return response.data
+
+from fastapi import FastAPI, HTTPException
+import trails as trail_service
+import packing as packing_service
+
+app = FastAPI(title="Hike Buddy API")
+
+# --- Trail Endpoints ---
+
+@app.get("/trails")
+async def get_trails(query: str = None, lat: float = None, lon: float = None):
+    return await trail_service.get_all_trails(query, lat, lon)
+
+@app.get("/trails/{trail_id}")
+async def get_trail_detail(trail_id: str):
+    return await trail_service.get_trail_detail_from_api(trail_id)
+
+@app.post("/trails/submit")
+async def submit_trail(trail_data: dict):
+    return await trail_service.submit_trail(trail_data)
+
+# --- Packing List Endpoint ---
+
+@app.get("/packing-list")
+def get_packing_list(duration: float, weather: str, terrain: str):
+    gear = packing_service.generate_packing_list(duration, weather, terrain)
+    return {"gear": gear}
+
+# --- Health Check ---
+
+@app.get("/")
+def root():
+    return {"status": "Hike Buddy API is running"}
 
 # --- Waymarked Trails API ---
-
 async def get_trails_from_api(query: str = None, lat: float = None, lon: float = None):
     params = {"limit": 20}
     if query:
@@ -24,7 +66,6 @@ async def get_trails_from_api(query: str = None, lat: float = None, lon: float =
         response.raise_for_status()
         data = response.json()
 
-    # normalize to a consistent shape
     trails = []
     for item in data.get("results", []):
         trails.append({
@@ -36,54 +77,22 @@ async def get_trails_from_api(query: str = None, lat: float = None, lon: float =
         })
     return trails
 
-
 async def get_trail_detail_from_api(trail_id: str):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"{WAYMARKED_BASE}/details/{trail_id}")
-        response.raise_for_status()
-        return response.json()
-
-
-# --- Your Own Database Trails ---
-
-def get_trails_from_db(db: Session):
-    return db.query(Trail).filter(Trail.status == "approved").all()
-
-
-def submit_trail(db: Session, trail_data: dict):
-    new_trail = Trail(**trail_data)
-    db.add(new_trail)
-    db.commit()
-    db.refresh(new_trail)
-    return new_trail
-
-
-def approve_trail(db: Session, trail_id: int):
-    trail = db.query(Trail).filter(Trail.id == trail_id).first()
-    if trail:
-        trail.status = "approved"
-        db.commit()
-        db.refresh(trail)
-    return trail
-
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{WAYMARKED_BASE}/details/{trail_id}")
+            response.raise_for_status()
+            return response.json()
+    except:
+        return {"error": "API unavailable", "id": trail_id}
 
 # --- Merge Both Sources ---
+async def get_all_trails(query: str = None, lat: float = None, lon: float = None):
+    try:
+        api_trails = await get_trails_from_api(query, lat, lon)
+    except:
+        api_trails = []
 
-async def get_all_trails(db: Session, query: str = None, lat: float = None, lon: float = None):
-    api_trails = await get_trails_from_api(query, lat, lon)
+    db_trails = await run_in_threadpool(get_trails_from_db)
 
-    db_trails = get_trails_from_db(db)
-    db_trails_formatted = [
-        {
-            "id": t.id,
-            "name": t.name,
-            "region": t.region,
-            "difficulty": t.difficulty,
-            "lat": t.lat,
-            "lon": t.lon,
-            "source": t.source,
-        }
-        for t in db_trails
-    ]
-
-    return api_trails + db_trails_formatted
+    return api_trails + db_trails
