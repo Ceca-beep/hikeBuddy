@@ -1,0 +1,30 @@
+{
+  "name": "hikebuddy",
+  "version": "1.0.0",
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@react-navigation/native": "^7.1.33",
+    "@react-navigation/stack": "^7.8.5",
+    "@supabase/supabase-js": "^2.99.1",
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.6",
+    "expo": "^54.0.0",
+    "expo-linear-gradient": "~15.0.8",
+    "express": "^5.2.1",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-calendars": "^1.1314.0",
+    "react-native-maps": "1.20.1",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-url-polyfill": "^3.0.0",
+    "react-native-web": "^0.21.0"
+  }
+}
