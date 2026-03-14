@@ -5,34 +5,30 @@ import {
     TextInput,
     TouchableOpacity,
     StyleSheet,
-    ScrollView,
     KeyboardAvoidingView,
     Platform,
+    ScrollView,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@expo/vector-icons';
 
-export default function SignUpScreen({ navigation }) {
-    const [fullName, setFullName] = useState('');
+export default function LoginScreen({ navigation }) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
 
-    const handleSignUp = async () => {
+    const handleLogin = async () => {
         try {
-            const response = await fetch('http://localhost:3000/signup', {
+            const response = await fetch('http://172.20.10.2:3000/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fullName, email, password }),
+                body: JSON.stringify({ email, password }),
             });
-
             const data = await response.json();
-
             if (response.ok) {
-                alert('Signup successful!');
-                navigation?.navigate('Login');
+                navigation?.navigate('Home');
             } else {
-                alert(data.message || 'Signup failed');
+                alert(data.message || 'Login failed');
             }
         } catch (error) {
             console.error(error);
@@ -49,107 +45,89 @@ export default function SignUpScreen({ navigation }) {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.flex}
             >
-                <ScrollView
-                    contentContainerStyle={styles.container}
-                    keyboardShouldPersistTaps="handled"
-                >
-                    {/* Logo */}
-                    <View style={styles.logoContainer}>
-                        <View style={styles.logoCircle}>
-                            <MaterialIcons name="terrain" size={48} color="#3d5a44" />
-                        </View>
-                        <Text style={styles.appName}>HikeBuddy</Text>
+                <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
+                            <MaterialIcons name="arrow-back" size={24} color="white" />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>HikeBuddy</Text>
+                        <View style={{ width: 48 }} />
                     </View>
 
-                    {/* Title */}
-                    <View style={styles.titleContainer}>
-                        <Text style={styles.title}>Join the Adventure</Text>
-                        <Text style={styles.subtitle}>Start your journey into the wild today.</Text>
+                    {/* Logo */}
+                    <View style={styles.logoSection}>
+                        <View style={styles.logoCircle}>
+                            <MaterialIcons name="terrain" size={48} color="white" />
+                        </View>
+                        <Text style={styles.appName}>HikeBuddy</Text>
+                        <Text style={styles.appTagline}>Find your trail companion</Text>
                     </View>
 
                     {/* Form */}
                     <View style={styles.form}>
-                        {/* Full Name */}
-                        <View style={styles.fieldContainer}>
-                            <Text style={styles.label}>Full Name</Text>
-                            <View style={styles.inputWrapper}>
-                                <MaterialIcons name="person" size={20} color="#94a3b8" style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Enter your full name"
-                                    placeholderTextColor="#94a3b8"
-                                    value={fullName}
-                                    onChangeText={setFullName}
-                                    autoCapitalize="words"
-                                />
-                            </View>
-                        </View>
+                        <Text style={styles.formTitle}>Welcome Back</Text>
 
-                        {/* Email */}
                         <View style={styles.fieldContainer}>
                             <Text style={styles.label}>Email</Text>
-                            <View style={styles.inputWrapper}>
-                                <MaterialIcons name="mail" size={20} color="#94a3b8" style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Enter your email"
-                                    placeholderTextColor="#94a3b8"
-                                    value={email}
-                                    onChangeText={setEmail}
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                />
-                            </View>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Enter email"
+                                placeholderTextColor="rgba(255,255,255,0.5)"
+                                value={email}
+                                onChangeText={setEmail}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                            />
                         </View>
 
-                        {/* Password */}
                         <View style={styles.fieldContainer}>
                             <Text style={styles.label}>Password</Text>
-                            <View style={styles.inputWrapper}>
-                                <MaterialIcons name="lock" size={20} color="#94a3b8" style={styles.inputIcon} />
+                            <View style={styles.passwordWrapper}>
                                 <TextInput
-                                    style={[styles.input, styles.passwordInput]}
-                                    placeholder="Create a password"
-                                    placeholderTextColor="#94a3b8"
+                                    style={[styles.input, { flex: 1, borderWidth: 0, backgroundColor: 'transparent' }]}
+                                    placeholder="Password"
+                                    placeholderTextColor="rgba(255,255,255,0.5)"
                                     value={password}
                                     onChangeText={setPassword}
                                     secureTextEntry={!showPassword}
                                     autoCapitalize="none"
                                 />
-                                <TouchableOpacity
-                                    onPress={() => setShowPassword(!showPassword)}
-                                    style={styles.eyeIcon}
-                                >
+                                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
                                     <MaterialIcons
                                         name={showPassword ? 'visibility-off' : 'visibility'}
-                                        size={20}
-                                        color="#94a3b8"
+                                        size={22}
+                                        color="rgba(255,255,255,0.7)"
                                     />
                                 </TouchableOpacity>
                             </View>
                         </View>
 
-                        {/* Submit Button */}
-                        <TouchableOpacity style={styles.button} onPress={handleSignUp} activeOpacity={0.9}>
-                            <Text style={styles.buttonText}>Create Account</Text>
-                            <MaterialIcons name="arrow-forward" size={20} color="white" />
+                        <TouchableOpacity style={styles.button} onPress={handleLogin} activeOpacity={0.9}>
+                            <Text style={styles.buttonText}>LOG IN</Text>
                         </TouchableOpacity>
 
-                        {/* Login Link */}
-                        <View style={styles.loginContainer}>
-                            <Text style={styles.loginText}>Already have an account? </Text>
-                            <TouchableOpacity onPress={() => navigation?.navigate('Login')}>
-                                <Text style={styles.loginLink}>Log in</Text>
-                            </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity style={styles.forgotBtn}>
+                            <Text style={styles.forgotText}>Forgot your password?</Text>
+                        </TouchableOpacity>
                     </View>
 
                     {/* Footer */}
                     <View style={styles.footer}>
-                        <MaterialIcons name="forest" size={36} color="#3d5a44" style={styles.footerIcon} />
-                        <MaterialIcons name="hiking" size={36} color="#3d5a44" style={styles.footerIcon} />
-                        <MaterialIcons name="explore" size={36} color="#3d5a44" style={styles.footerIcon} />
+                        <Text style={styles.footerText}>New here? </Text>
+                        <TouchableOpacity onPress={() => navigation?.navigate('SignUp')}>
+                            <Text style={styles.footerLink}>Sign up</Text>
+                        </TouchableOpacity>
                     </View>
+
+                    {/* Bottom mountains */}
+                    <View style={styles.mountains}>
+                        <View style={[styles.mountain, { left: 0, width: 180, height: 90 }]} />
+                        <View style={[styles.mountain, { left: 130, width: 220, height: 120 }]} />
+                        <View style={[styles.mountain, { right: 0, width: 180, height: 90 }]} />
+                    </View>
+
                 </ScrollView>
             </KeyboardAvoidingView>
         </LinearGradient>
@@ -161,118 +139,157 @@ const styles = StyleSheet.create({
     gradient: { flex: 1 },
     container: {
         flexGrow: 1,
+        paddingBottom: 40,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingTop: 52,
+        paddingBottom: 8,
+    },
+    backBtn: {
+        width: 48,
+        height: 48,
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 24,
     },
-    logoContainer: {
+    headerTitle: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: '700',
+    },
+    logoSection: {
         alignItems: 'center',
-        marginBottom: 32,
+        paddingTop: 24,
+        paddingBottom: 16,
     },
     logoCircle: {
-        backgroundColor: 'rgba(61, 90, 68, 0.1)',
-        padding: 16,
-        borderRadius: 999,
+        width: 128,
+        height: 128,
+        alignItems: 'center',
+        justifyContent: 'center',
         marginBottom: 12,
+        position: 'relative',
+    },
+    logoBlur: {
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        borderRadius: 64,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+    },
+    logoIcons: {
+        alignItems: 'center',
+        zIndex: 1,
     },
     appName: {
-        color: '#3d5a44',
-        fontSize: 22,
+        color: 'white',
+        fontSize: 32,
         fontWeight: '700',
-        letterSpacing: -0.5,
+        marginBottom: 4,
     },
-    titleContainer: {
-        alignItems: 'center',
-        marginBottom: 32,
-    },
-    title: {
-        color: '#0f172a',
-        fontSize: 28,
-        fontWeight: '700',
-        marginBottom: 6,
-    },
-    subtitle: {
-        color: '#475569',
+    appTagline: {
+        color: 'rgba(204,213,174,0.9)',
         fontSize: 14,
+        fontWeight: '500',
     },
     form: {
-        width: '100%',
-        maxWidth: 440,
+        paddingHorizontal: 24,
+        paddingTop: 16,
         gap: 20,
+    },
+    formTitle: {
+        color: 'white',
+        fontSize: 24,
+        fontWeight: '700',
     },
     fieldContainer: {
         gap: 8,
     },
     label: {
-        color: '#334155',
+        color: 'white',
         fontSize: 14,
         fontWeight: '600',
         paddingHorizontal: 4,
     },
-    inputWrapper: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.7)',
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
+    input: {
+        backgroundColor: 'rgba(255,255,255,0.1)',
         borderRadius: 12,
         paddingHorizontal: 16,
+        height: 56,
+        color: 'white',
+        fontSize: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.15)',
     },
-    inputIcon: {
-        marginRight: 8,
-    },
-    input: {
-        flex: 1,
-        paddingVertical: 14,
-        color: '#0f172a',
-        fontSize: 15,
-    },
-    passwordInput: {
-        paddingRight: 8,
-    },
-    eyeIcon: {
-        padding: 4,
-    },
-    button: {
-        backgroundColor: '#3d5a44',
-        borderRadius: 12,
-        paddingVertical: 16,
+    passwordWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.15)',
+        height: 56,
+    },
+    eyeBtn: { padding: 4 },
+    button: {
+        backgroundColor: '#f4c2c2',
+        borderRadius: 12,
+        height: 56,
+        alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
         marginTop: 4,
-        shadowColor: '#3d5a44',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.2,
         shadowRadius: 8,
         elevation: 4,
     },
     buttonText: {
-        color: 'white',
-        fontSize: 16,
+        color: '#1e293b',
+        fontSize: 18,
         fontWeight: '700',
+        letterSpacing: 1,
     },
-    loginContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
+    forgotBtn: {
         alignItems: 'center',
-        paddingTop: 8,
     },
-    loginText: {
-        color: '#475569',
+    forgotText: {
+        color: 'rgba(255,255,255,0.8)',
         fontSize: 14,
-    },
-    loginLink: {
-        color: '#3d5a44',
-        fontSize: 14,
-        fontWeight: '700',
     },
     footer: {
         flexDirection: 'row',
-        gap: 16,
-        marginTop: 48,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 32,
+    },
+    footerText: {
+        color: 'rgba(255,255,255,0.9)',
+        fontSize: 15,
+    },
+    footerLink: {
+        color: 'white',
+        fontSize: 15,
+        fontWeight: '700',
+        textDecorationLine: 'underline',
+    },
+    mountains: {
+        width: '100%',
+        height: 120,
+        marginTop: 24,
+        position: 'relative',
         opacity: 0.2,
     },
-    footerIcon: {},
+    mountain: {
+        position: 'absolute',
+        bottom: 0,
+        backgroundColor: '#2d5a3d',
+        borderTopLeftRadius: 999,
+        borderTopRightRadius: 999,
+    },
 });
