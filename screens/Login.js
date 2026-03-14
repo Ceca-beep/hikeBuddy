@@ -26,7 +26,7 @@ export default function LoginScreen({ navigation }) {
             });
             const data = await response.json();
             if (response.ok) {
-                navigation?.navigate('Homescreen');
+                navigation?.navigate('Home');
             } else {
                 alert(data.message || 'Login failed');
             }
@@ -112,7 +112,7 @@ export default function LoginScreen({ navigation }) {
                             <Text style={styles.forgotText}>Forgot your password?</Text>
                         </TouchableOpacity>
                     </View>
-                    <TouchableOpacity onPress={() => navigation?.navigate('Homescreen')}>
+                    <TouchableOpacity onPress={() => navigation?.navigate('Home')}>
                         <Text style={styles.skipText}>Skip for now</Text>
                     </TouchableOpacity>
                     {/* Footer */}
