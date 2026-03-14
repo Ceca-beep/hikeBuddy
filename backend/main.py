@@ -6,21 +6,23 @@ import trails as trail_service
 import packing as packing_service
 
 # creates database tables on startup
-models.Base.metadata.create_all(bind=engine)
+try:
+    models.Base.metadata.create_all(bind=engine)
+except Exception as e:
+    raise RuntimeError(
+        "Failed to initialize database. Make sure DATABASE_URL is set and the database is reachable. "
+        f"Original error: {e}"
+    )
 
 app = FastAPI(title="Hike Buddy API")
 
 
 # --- Trail Endpoints ---
 
+
 @app.get("/trails")
-async def get_trails(
-    query: str = None,
-    lat: float = None,
-    lon: float = None,
-    db: Session = Depends(get_db)
-):
-    return await trail_service.get_all_trails(db, query, lat, lon)
+async def get_trails(query: str = None, lat: float = None, lon: float = None):
+    return await trail_service.get_all_trails(query, lat, lon)
 
 
 @app.get("/trails/{trail_id}")
