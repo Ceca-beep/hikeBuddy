@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import trails as trail_service
 import packing as packing_service
+import supabase
 import hashlib
 import uuid
 from pydantic import BaseModel, EmailStr
@@ -91,7 +92,7 @@ class UserLogin(BaseModel):
 async def login_user(credentials: UserLogin):
     try:
         # 1. Look up the user by the 'mail' column in your table
-        response = supabase.table("users") \
+        response = get_supabase().table("users") \
             .select("*") \
             .eq("mail", credentials.email) \
             .execute()
