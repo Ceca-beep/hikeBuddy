@@ -7,6 +7,7 @@ import hashlib
 import uuid
 from pydantic import BaseModel, EmailStr
 from database import get_supabase
+from datetime import datetime
 
 app = FastAPI(title="Hike Buddy API")
 
@@ -125,3 +126,38 @@ async def login_user(credentials: UserLogin):
     except Exception as e:
         print(f"Login Error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+    
+
+
+# --- Pydantic Schema for Ping ---
+class PingJSON(BaseModel):
+    user_id: str
+    latitude: float
+    longitude: float
+    status: str = "active"  # Default status if not provided
+
+@app.post("/pings")
+async def create_ping(data: PingJSON):
+    try:
+        # 1. Prepare the payload for Supabase
+        # We don't need to generate a UUID if your table uses an auto-incrementing ID
+        ping_payload = {
+            "user_id": data.user_id,
+            "latitude": data.latitude,
+            "longitude": data.longitude,
+            "status": data.status,
+            "created_at": datetime.utcnow().isoformat()
+        }
+
+        # 2. Insert into the 'pings' table
+        response = supabase.table("pings").insert(ping_payload).execute()
+
+        return {
+            "status": "success",
+            "message": "Ping recorded",
+            "data": response.data
+        }
+
+    except Exception as e:
+        print(f"Ping Error: {e}")
+        raise HTTPException(status_code=400, detail="Failed to record ping.")
