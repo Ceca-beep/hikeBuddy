@@ -84,3 +84,45 @@ async def register_from_json(data: RegistrationJSON):
     except Exception as e:
         print(f"Database Error: {e}")
         raise HTTPException(status_code=400, detail="Registration failed. Check if email exists.")
+# --- Pydantic Schema for Login ---
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+@app.post("/login")
+async def login_user(credentials: UserLogin):
+    try:
+        # 1. Look up the user by the 'mail' column in your table
+        response = supabase.table("users") \
+            .select("*") \
+            .eq("mail", credentials.email) \
+            .execute()
+        
+        # 2. Check if user exists
+        if not response.data:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        user = response.data[0]
+        
+        # 3. Hash the incoming password to compare with the stored hash
+        incoming_hash = hash_password(credentials.password)
+        
+        if incoming_hash != user['password']:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # 4. Success! Return the user data (excluding the password)
+        return {
+            "status": "success",
+            "message": "Login successful",
+            "user": {
+                "id": user['id'],
+                "name": user['name'],
+                "email": user['mail']
+            }
+        }
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Login Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
