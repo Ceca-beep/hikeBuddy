@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(curl:*)",
+      "Bash(netstat:*)",
+      "Bash(cmd //c \"taskkill /PID 12600 /F && taskkill /PID 30468 /F\")"
+    ]
+  }
+}
