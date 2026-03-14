@@ -104,48 +104,47 @@ async def login_user(credentials: UserLogin):
 # ── Pings ─────────────────────────────────────────────────────────────────────
 
 class PingJSON(BaseModel):
-    type:        str                    # e.g. "bear", "trail damage"
-    lat:         float
-    lng:         float
-    description: str = ""
-    trail_id:    str = None             # optional — link to a trail
+    type: str           # varchar
+    lat: float          # float8
+    lng: float          # float8
+    description: str    # text
 
 @app.post("/pings")
 async def create_ping(data: PingJSON):
     """Report a danger ping on a trail."""
     try:
+        now = datetime.utcnow()
+        
         ping_payload = {
-            "type":        data.type,
-            "lat":         data.lat,
-            "lng":         data.lng,
-            "description": data.description,
-            "date":        datetime.utcnow().isoformat(),
+            "id": str(uuid.uuid4()),            # uuid (Required if not auto-gen)
+            "type": data.type,                  # varchar
+            "lat": data.lat,                    # float8
+            "lng": data.lng,                    # float8
+            "description": data.description,    # text
+            "time": now.strftime("%H:%M:%S"),   # timetz
+            "date": now.isoformat(),            # timestamptz
         }
-        # Only add trail_id if provided and your table has it
-        if data.trail_id:
-            ping_payload["trail_id"] = data.trail_id
 
+        # Use your global 'supabase' client we initialized earlier
         response = get_supabase().table("pings").insert(ping_payload).execute()
 
         return {
-            "status":  "success",
+            "status": "success",
             "message": "Ping recorded",
-            "data":    response.data,
+            "data": response.data,
         }
 
     except Exception as e:
         print(f"Ping Error: {e}")
-        raise HTTPException(status_code=400, detail="Failed to record ping.")
+        raise HTTPException(status_code=400, detail=f"Failed to record ping: {str(e)}")
 
 
 @app.get("/pings")
-async def get_pings(trail_id: str = None):
-    """Get recent pings, optionally filtered by trail."""
+async def get_pings():
+    """Get all recent pings to display on the map."""
     try:
-        q = get_supabase().table("pings").select("*").order("date", desc=True)
-        if trail_id:
-            q = q.eq("trail_id", trail_id)
-        response = q.execute()
+        # Ordering by date so newest pings appear first
+        response = get_supabase().table("pings").select("*").order("date", desc=True).execute()
         return {"pings": response.data or []}
     except Exception as e:
         print(f"Get pings error: {e}")
