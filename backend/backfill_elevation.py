@@ -1,27 +1,36 @@
 """
 backfill_elevation.py
 ─────────────────────
-Reads trails from Supabase where ascent/descend/max_elevation are NULL
-(Waymarked returned 0 / unknown), samples coordinates from route_path,
-fetches real elevations from OpenTopoData, and writes stats back.
+Reads trails from Supabase where ascent/descend/max_elevation are NULL,
+fetches real elevations from OpenTopoData, computes stats, and also
+calculates difficulty using the Shenandoah National Park formula:
+
+    score = √(ascent_m × 2 × distance_km)
+
+    < 50   → easy
+    50-100 → moderate
+    100-150→ hard
+    > 150  → expert
+
+Also recalculates duration using Naismith's Rule:
+    duration (minutes) = distance_km * 12 + (ascent_m / 100 * 10)
 
 OpenTopoData public API limits:
   - 100 locations per request
   - 1 request / second
-  - 1,000 requests / day  (~1,000 trails/day at SAMPLE_POINTS=50)
-
-Self-host for unlimited: https://www.opentopodata.org/#host-your-own
+  - 1,000 requests / day
 
 Install:
     pip install httpx supabase python-dotenv tqdm
 
 .env:
     SUPABASE_URL=https://xxxx.supabase.co
-    SUPABASE_KEY=your-service-role-key
+    SUPABASE_KEY=sb_secret_...
 """
 
 import os
 import json
+import math
 import asyncio
 import logging
 from typing import Optional
@@ -39,12 +48,12 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 OTD_BASE      = "https://api.opentopodata.org/v1"
-OTD_DATASET   = "srtm30m"   # or "eudem25m" for higher-res EU coverage
-OTD_BATCH     = 100         # hard API limit per request
-OTD_RATE      = 1.1         # seconds between requests
-OTD_MAX_DAILY = 1000        # public API daily cap
+OTD_DATASET   = "srtm30m"
+OTD_BATCH     = 100
+OTD_RATE      = 1.1
+OTD_MAX_DAILY = 1000
 
-SAMPLE_POINTS = 50          # coordinates sampled per trail
+SAMPLE_POINTS = 50
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,6 +63,42 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 _requests_made = 0
+
+# ─── Difficulty calculation ───────────────────────────────────────────────────
+
+def calculate_difficulty(distance_km: Optional[float], ascent_m: Optional[float]) -> Optional[str]:
+    """
+    Shenandoah National Park formula:
+        score = √(ascent_m × 2 × distance_km)
+
+    Thresholds:
+        < 50   → easy
+        50-100 → moderate
+        100-150→ hard
+        > 150  → expert
+    """
+    if not distance_km or not ascent_m:
+        return None
+    score = math.sqrt(ascent_m * 2 * distance_km)
+    if score < 50:
+        return "easy"
+    elif score < 100:
+        return "moderate"
+    elif score < 150:
+        return "hard"
+    else:
+        return "expert"
+
+# ─── Duration calculation ─────────────────────────────────────────────────────
+
+def calculate_duration(distance_km: Optional[float], ascent_m: Optional[float]) -> Optional[float]:
+    """
+    Naismith's Rule:
+        duration (minutes) = distance_km * 12 + (ascent_m / 100 * 10)
+    """
+    if not distance_km:
+        return None
+    return round(distance_km * 12 + (ascent_m or 0) / 100 * 10, 0)
 
 # ─── Geometry helpers ─────────────────────────────────────────────────────────
 
@@ -124,7 +169,7 @@ async def fetch_elevations(client: httpx.AsyncClient, coords) -> list[Optional[f
             result.extend([None] * (len(coords) - len(result)))
             return result
 
-        batch = coords[i : i + OTD_BATCH]
+        batch = coords[i: i + OTD_BATCH]
         locs  = "|".join(f"{lat},{lon}" for lat, lon in batch)
 
         for attempt in range(1, 4):
@@ -160,7 +205,7 @@ def fetch_trails_needing_elevation(supabase: Client) -> list[dict]:
     while True:
         resp = (
             supabase.table("trails")
-            .select("id, osm_id, name, route_path")
+            .select("id, osm_id, name, distance_km, route_path")
             .not_.is_("route_path", "null")
             .is_("ascent", "null")
             .is_("descend", "null")
@@ -176,7 +221,7 @@ def fetch_trails_needing_elevation(supabase: Client) -> list[dict]:
     return all_rows
 
 
-def update_elevation(supabase: Client, trail_id: str, stats: dict):
+def update_trail(supabase: Client, trail_id: str, stats: dict):
     supabase.table("trails").update(stats).eq("id", trail_id).execute()
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -199,8 +244,9 @@ async def run_backfill():
     ) as client:
 
         for trail in tqdm(trails, desc="Elevation backfill", unit="trail"):
-            trail_id = trail["id"]
-            name     = trail.get("name") or f"id:{trail_id}"
+            trail_id    = trail["id"]
+            name        = trail.get("name") or f"id:{trail_id}"
+            distance_km = trail.get("distance_km")
 
             geojson = trail.get("route_path")
             if isinstance(geojson, str):
@@ -227,19 +273,38 @@ async def run_backfill():
                 continue
 
             stats = compute_stats(elevations)
-            update_elevation(supabase, trail_id, stats)
+
+            # Calculate difficulty with real ascent data
+            difficulty = calculate_difficulty(distance_km, stats.get("ascent"))
+            if difficulty:
+                stats["difficulty"] = difficulty
+
+            # Recalculate duration with real ascent data
+            duration = calculate_duration(distance_km, stats.get("ascent"))
+            if duration:
+                stats["duration"] = duration
+
+            update_trail(supabase, trail_id, stats)
             filled += 1
 
-            log.debug("%-40s  ↑%.0fm  ↓%.0fm  max=%.0fm",
-                name[:40], stats["ascent"] or 0,
-                stats["descend"] or 0, stats["max_elevation"] or 0)
+            log.debug(
+                "%-40s  ↑%.0fm  ↓%.0fm  max=%.0fm  difficulty=%s  duration=%.0fmin",
+                name[:40],
+                stats["ascent"]        or 0,
+                stats["descend"]       or 0,
+                stats["max_elevation"] or 0,
+                stats.get("difficulty", "n/a"),
+                stats.get("duration")  or 0,
+            )
 
             if _requests_made >= OTD_MAX_DAILY:
                 log.warning("Daily cap hit after %d trails. Re-run tomorrow.", filled)
                 break
 
-    log.info("Done. filled=%d  skipped=%d  errors=%d  api_calls=%d/%d",
-             filled, skipped, errors, _requests_made, OTD_MAX_DAILY)
+    log.info(
+        "Done. filled=%d  skipped=%d  errors=%d  api_calls=%d/%d",
+        filled, skipped, errors, _requests_made, OTD_MAX_DAILY,
+    )
 
 
 if __name__ == "__main__":
