@@ -373,4 +373,8 @@ const styles = StyleSheet.create({
     buttonRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
     backBtn: { flex: 1, height: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.1)' },
     backBtnText: { color: 'white', fontWeight: '600', fontSize: 15 },
+<<<<<<< HEAD
 });
+=======
+});
+>>>>>>> b7573015126dfca5d40e67a9acf1861e36ee79fa
