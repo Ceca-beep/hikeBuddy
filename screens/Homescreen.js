@@ -353,7 +353,15 @@ export default function HomeScreen({ navigation }) {
                                                 <View style={styles.cardStats}>
                                                     <Text style={styles.cardStat}>{formatDuration(item.duration)}</Text>
                                                     <Text style={styles.cardStatDot}>·</Text>
-                                                    <Text style={styles.cardStat}>{item.distance_km} km</Text>
+                                                    <Text style={styles.cardStat}>
+                                                        {(() => {
+                                                            const d = parseFloat(item.distance_km);
+                                                            if (isNaN(d)) return "0";
+                                                            // Dacă e peste 1000, e clar că sunt metri (ex: 5700m -> 5.7km)
+                                                            // Dacă e sub 1000, e deja în km (ex: 5.7 -> 5.7km)
+                                                            return d > 1000 ? (d / 1000).toFixed(1) : d.toFixed(1);
+                                                        })()} km
+                                                    </Text>
                                                     {item.ascent && (
                                                         <>
                                                             <Text style={styles.cardStatDot}>·</Text>

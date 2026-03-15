@@ -140,7 +140,14 @@ export default function TrailDetails({ route, navigation }) {
                         {/* Stats */}
                         <View style={styles.statsRow}>
                             <View style={styles.statCard}>
-                                <Text style={styles.statValue}>{trail.distance_km} km</Text>
+                                <Text style={styles.statValue}>
+                                    {(() => {
+                                        const d = parseFloat(trail.distance_km);
+                                        if (isNaN(d)) return "0";
+                                        // Dacă valoarea e uriașă, o tratăm ca metri și convertim
+                                        return d > 1000 ? (d / 1000).toFixed(1) : d.toFixed(1);
+                                    })()} km
+                                </Text>
                                 <Text style={styles.statLabel}>Distance</Text>
                             </View>
                             <View style={styles.statCard}>
