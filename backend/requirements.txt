@@ -8,3 +8,4 @@ gpxpy
 supabase
 psycopg2-binary
 datetime
+tqdm.asyncio
