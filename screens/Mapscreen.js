@@ -89,6 +89,7 @@ export default function Mapscreen({ route, navigation }) {
 
     // ─── Initial Load ────────────────────────────────────────────────────────
     useEffect(() => {
+        AsyncStorage.removeItem('pending_pings');
         if (trail?.route_path) {
             const segments = geojsonToSegments(trail.route_path);
             setRouteSegments(segments);
@@ -108,8 +109,13 @@ export default function Mapscreen({ route, navigation }) {
     const toggleOfflineMode = async () => {
         const goingOffline = !simulateOffline;
         setSimulateOffline(goingOffline);
-        if (!goingOffline) await flushQueue();
-        else setSyncStatus('offline');
+
+        if (!goingOffline) {
+            setSyncStatus('syncing');
+            await flushQueue();
+        } else {
+            setSyncStatus('offline');
+        }
     };
 
     // ─── Sync Logic ──────────────────────────────────────────────────────────
@@ -125,7 +131,11 @@ export default function Mapscreen({ route, navigation }) {
         if (isSyncing.current) return;
         const raw = await AsyncStorage.getItem(QUEUE_KEY);
         const queue = raw ? JSON.parse(raw) : [];
-        if (queue.length === 0) return;
+
+        if (queue.length === 0) {
+            setSyncStatus('online'); // Dacă nu e nimic în coadă, suntem online direct
+            return;
+        }
 
         isSyncing.current = true;
         setSyncStatus('syncing');
@@ -135,17 +145,34 @@ export default function Mapscreen({ route, navigation }) {
             try {
                 const res = await fetch(API_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
+                    },
                     body: JSON.stringify(payload),
                 });
-                if (!res.ok) failed.push(payload);
-            } catch { failed.push(payload); }
+
+                // Dacă serverul dă 400 sau 500, e o problemă cu datele ping-ului, nu cu netul
+                if (!res.ok) {
+                    console.log("Server rejected ping:", await res.text());
+                    failed.push(payload);
+                }
+            } catch (err) {
+                console.log("Network error during sync:", err);
+                failed.push(payload);
+            }
         }
 
         await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(failed));
         setQueueCount(failed.length);
-        setSyncStatus(failed.length === 0 ? 'synced' : 'offline');
-        if (failed.length === 0) setTimeout(() => setSyncStatus('online'), 3000);
+
+        if (failed.length === 0) {
+            setSyncStatus('synced');
+            setTimeout(() => setSyncStatus('online'), 3000);
+        } else {
+            // Dacă au rămas pungi, înseamnă că netul e încă picat sau datele sunt proaste
+            setSyncStatus('offline');
+        }
         isSyncing.current = false;
     };
 
@@ -161,7 +188,7 @@ export default function Mapscreen({ route, navigation }) {
             "lat": tempPing.latitude,
             "lng": tempPing.longitude,
             "description": customDetail,
-            "id": trail.id || trail.osm_id
+            "trail_id": trail.id
         };
 
         setIsAddingPing(false);
@@ -171,27 +198,41 @@ export default function Mapscreen({ route, navigation }) {
 
         if (simulateOffline) {
             await saveToQueue(payload);
-            setCurrentPings(prev => [...prev, { ...payload, id: `temp-${Date.now()}`, date: new Date().toISOString() }]);
+            // Adăugăm local cu ID temporar ca să apară instant
+            setCurrentPings(prev => [...prev, { ...payload, id: `temp-${Date.now()}` }]);
             return;
         }
 
         try {
             const res = await fetch(API_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                },
                 body: JSON.stringify(payload),
             });
+
             const result = await res.json();
+
             if (res.ok) {
-                if (result.data && result.data[0]) setCurrentPings(prev => [result.data[0], ...prev]);
-                else setCurrentPings(prev => [{...payload, id: Date.now()}, ...prev]);
+                // Dacă baza de date returnează obiectul creat (care are și ID-ul real din DB)
+                if (result.data && result.data[0]) {
+                    setCurrentPings(prev => [...prev, result.data[0]]);
+                } else {
+                    // Dacă API-ul nu returnează obiectul, îl adăugăm pe cel trimis de noi + un ID generat
+                    setCurrentPings(prev => [...prev, { ...payload, id: Date.now() }]);
+                }
                 alert('Danger reported!');
             } else {
                 await saveToQueue(payload);
+                setCurrentPings(prev => [...prev, { ...payload, id: `temp-${Date.now()}` }]);
                 setSyncStatus('offline');
             }
         } catch (e) {
+            console.error("Submit error:", e);
             await saveToQueue(payload);
+            setCurrentPings(prev => [...prev, { ...payload, id: `temp-${Date.now()}` }]);
             setSyncStatus('offline');
         }
     };
