@@ -82,30 +82,35 @@ async def login_user(credentials: UserLogin):
 
 # ── Pings ─────────────────────────────────────────────────────────────────────
 
+ROMANIA_TZ = timezone(timedelta(hours=2))  # EET (UTC+2)
+
 class PingJSON(BaseModel):
-    type:        str
-    lat:         float
-    lng:         float
-    description: str = ""
-    trail_id:    str = None
+    type: str
+    lat: float
+    lng: float
+    description: str
+    trail_id: str  # Add this field
 
 @app.post("/pings")
 async def create_ping(data: PingJSON):
     try:
+        now_local = datetime.now(ROMANIA_TZ)
+        
         ping_payload = {
-            "type":        data.type,
-            "lat":         data.lat,
-            "lng":         data.lng,
+            "id": str(uuid.uuid4()),
+            "type": data.type,
+            "lat": data.lat,
+            "lng": data.lng,
             "description": data.description,
-            "date":        datetime.utcnow().isoformat(),
+            "trail_id": data.trail_id, # <--- The link is made here
+            "time": now_local.strftime("%H:%M:%S"),
+            "date": now_local.isoformat()
         }
-        if data.trail_id:
-            ping_payload["trail_id"] = data.trail_id
+
         response = get_supabase().table("pings").insert(ping_payload).execute()
-        return {"status": "success", "message": "Ping recorded", "data": response.data}
+        return {"status": "success", "data": response.data}
     except Exception as e:
-        print(f"Ping Error: {e}")
-        raise HTTPException(status_code=400, detail="Failed to record ping.")
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/pings")
 async def get_pings(trail_id: str = None):
