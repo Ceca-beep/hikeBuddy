@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar } from 'react-native-calendars';
-import { API_BASE, API_HEADERS } from './api';
+import { API_BASE, API_HEADERS } from './Api';
 
 const DIFFICULTY_OPTIONS = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 const FITNESS_OPTIONS    = ['Low', 'Medium', 'High', 'Athlete'];
@@ -155,14 +155,21 @@ export default function HomeScreen({ navigation }) {
     };
 
     const clearFilters = () => {
+        // pending
         setPendingDifficulty([]);
         setPendingFitness('Medium');
         setPendingDuration([]);
         setPendingDistance('Any');
         setPendingStart('');
         setPendingEnd('');
+        // aplicate
+        setSelectedDifficulty([]);
+        setSelectedFitness('Medium');
+        setSelectedDuration([]);
+        setSelectedDistance('Any');
+        setStartDate('');
+        setEndDate('');
     };
-
     const handleDayPress = (day) => {
         if (!pendingStart || (pendingStart && pendingEnd)) {
             setPendingStart(day.dateString);
@@ -240,7 +247,6 @@ export default function HomeScreen({ navigation }) {
                     </View>
                 </View>
 
-                {/* Search + Filter */}
                 <View style={styles.searchRow}>
                     <View style={styles.searchBox}>
                         <TextInput
@@ -265,105 +271,107 @@ export default function HomeScreen({ navigation }) {
                     </TouchableOpacity>
                 </View>
 
-                {/* Active filter chips */}
-                {activeFilterCount > 0 && (
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.activeFiltersScroll}
-                        contentContainerStyle={styles.activeFiltersRow}
-                    >
-                        {selectedDifficulty.map(d => (
-                            <TouchableOpacity key={d} style={styles.activeChip} onPress={() => setSelectedDifficulty(selectedDifficulty.filter(x => x !== d))}>
-                                <Text style={styles.activeChipText}>{d} ✕</Text>
-                            </TouchableOpacity>
-                        ))}
-                        {selectedDuration.map(d => (
-                            <TouchableOpacity key={d} style={styles.activeChip} onPress={() => setSelectedDuration(selectedDuration.filter(x => x !== d))}>
-                                <Text style={styles.activeChipText}>{d} ✕</Text>
-                            </TouchableOpacity>
-                        ))}
-                        {selectedDistance !== 'Any' && (
-                            <TouchableOpacity style={styles.activeChip} onPress={() => setSelectedDistance('Any')}>
-                                <Text style={styles.activeChipText}>{selectedDistance} ✕</Text>
-                            </TouchableOpacity>
-                        )}
-                        {startDate && (
-                            <TouchableOpacity style={styles.activeChip} onPress={() => { setStartDate(''); setEndDate(''); }}>
-                                <Text style={styles.activeChipText}>📅 {formatDate(startDate)} ✕</Text>
-                            </TouchableOpacity>
-                        )}
-                        {selectedFitness !== 'Medium' && (
-                            <TouchableOpacity style={styles.activeChip} onPress={() => setSelectedFitness('Medium')}>
-                                <Text style={styles.activeChipText}>🏃 {selectedFitness} ✕</Text>
-                            </TouchableOpacity>
-                        )}
-                    </ScrollView>
-                )}
-
-                {/* Trail list */}
-                {loading ? (
-                    <View style={styles.centerBox}>
-                        <ActivityIndicator size="large" color="#f8c8c8" />
-                        <Text style={styles.centerText}>Loading trails...</Text>
-                    </View>
-                ) : error ? (
-                    <View style={styles.centerBox}>
-                        <Text style={styles.errorText}>{error}</Text>
-                        <TouchableOpacity style={styles.retryBtn} onPress={() => fetchTrails()}>
-                            <Text style={styles.retryText}>Retry</Text>
-                        </TouchableOpacity>
-                    </View>
-                ) : trails.length === 0 ? (
-                    <View style={styles.centerBox}>
-                        <Text style={styles.centerText}>No trails match your filters.</Text>
-                        <TouchableOpacity style={styles.retryBtn} onPress={clearFilters}>
-                            <Text style={styles.retryText}>Clear filters</Text>
-                        </TouchableOpacity>
-                    </View>
-                ) : (
-                    <FlatList
-                        data={trails}
-                        keyExtractor={(item) => String(item.osm_id || item.id)}
-                        contentContainerStyle={styles.list}
-                        showsVerticalScrollIndicator={false}
-                        renderItem={({ item }) => {
-                            const diffColor = DIFFICULTY_COLORS[item.difficulty] || '#fff';
-                            return (
-                                <TouchableOpacity
-                                    style={styles.card}
-                                    activeOpacity={0.9}
-                                    onPress={() => openTrail(item)}
-                                >
-                                    <LinearGradient colors={['#1a3a2a', '#2d5a3d']} style={styles.cardImageArea}>
-                                        <Text style={styles.cardTrailName} numberOfLines={1}>{item.name}</Text>
-                                        <View style={[styles.difficultyBadge, { backgroundColor: diffColor + '33', borderColor: diffColor }]}>
-                                            <Text style={[styles.difficultyText, { color: diffColor }]}>{item.difficulty}</Text>
-                                        </View>
-                                        {item.dangers > 0 && (
-                                            <View style={styles.dangerBadge}>
-                                                <Text style={styles.dangerText}>⚠ {item.dangers}</Text>
-                                            </View>
-                                        )}
-                                    </LinearGradient>
-                                    <View style={styles.cardBody}>
-                                        <View style={styles.cardStats}>
-                                            <Text style={styles.cardStat}>{formatDuration(item.duration)}</Text>
-                                            <Text style={styles.cardStatDot}>·</Text>
-                                            <Text style={styles.cardStat}>{item.distance_km} km</Text>
-                                            {item.ascent && (
-                                                <>
-                                                    <Text style={styles.cardStatDot}>·</Text>
-                                                    <Text style={styles.cardStat}>+{item.ascent}m</Text>
-                                                </>
-                                            )}
-                                        </View>
-                                    </View>
+                {/* Filtrele active (Stau mereu sus) */}
+                <View style={{ height: activeFilterCount > 0 ? 50 : 0 }}>
+                    {activeFilterCount > 0 && (
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.activeFiltersScroll}
+                            contentContainerStyle={styles.activeFiltersRow}
+                        >
+                            {selectedDifficulty.map(d => (
+                                <TouchableOpacity key={d} style={styles.activeChip} onPress={() => setSelectedDifficulty(selectedDifficulty.filter(x => x !== d))}>
+                                    <Text style={styles.activeChipText}>{d} ✕</Text>
                                 </TouchableOpacity>
-                            );
-                        }}
-                    />
-                )}
+                            ))}
+                            {selectedDuration.map(d => (
+                                <TouchableOpacity key={d} style={styles.activeChip} onPress={() => setSelectedDuration(selectedDuration.filter(x => x !== d))}>
+                                    <Text style={styles.activeChipText}>{d} ✕</Text>
+                                </TouchableOpacity>
+                            ))}
+                            {selectedDistance !== 'Any' && (
+                                <TouchableOpacity style={styles.activeChip} onPress={() => setSelectedDistance('Any')}>
+                                    <Text style={styles.activeChipText}>{selectedDistance} ✕</Text>
+                                </TouchableOpacity>
+                            )}
+                            {startDate && (
+                                <TouchableOpacity style={styles.activeChip} onPress={() => { setStartDate(''); setEndDate(''); }}>
+                                    <Text style={styles.activeChipText}>📅 {formatDate(startDate)} ✕</Text>
+                                </TouchableOpacity>
+                            )}
+                            {selectedFitness !== 'Medium' && (
+                                <TouchableOpacity style={styles.activeChip} onPress={() => setSelectedFitness('Medium')}>
+                                    <Text style={styles.activeChipText}>🏃 {selectedFitness} ✕</Text>
+                                </TouchableOpacity>
+                            )}
+                        </ScrollView>
+                    )}
+                </View>
+
+                {/* Zona de conținut (Lista sau Mesajul de eroare) */}
+                <View style={{ flex: 1 }}>
+                    {loading ? (
+                        <View style={styles.centerBox}>
+                            <ActivityIndicator size="large" color="#f8c8c8" />
+                            <Text style={styles.centerText}>Loading trails...</Text>
+                        </View>
+                    ) : error ? (
+                        <View style={styles.centerBox}>
+                            <Text style={styles.errorText}>{error}</Text>
+                            <TouchableOpacity style={styles.retryBtn} onPress={() => fetchTrails()}>
+                                <Text style={styles.retryText}>Retry</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : trails.length === 0 ? (
+                        <View style={styles.centerBox}>
+                            <Text style={styles.centerText}>No trails match your filters.</Text>
+                            <TouchableOpacity style={styles.retryBtn} onPress={clearFilters}>
+                                <Text style={styles.retryText}>Clear filters</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <FlatList
+                            data={trails}
+                            keyExtractor={(item) => String(item.osm_id || item.id)}
+                            contentContainerStyle={styles.list}
+                            showsVerticalScrollIndicator={false}
+                            renderItem={({ item }) => {
+                                const diffColor = DIFFICULTY_COLORS[item.difficulty] || '#fff';
+                                return (
+                                    <TouchableOpacity style={styles.card} activeOpacity={0.9} onPress={() => openTrail(item)}>
+                                        <LinearGradient colors={['#1a3a2a', '#2d5a3d']} style={styles.cardImageArea}>
+                                            <Text style={styles.cardTrailName} numberOfLines={1}>{item.name}</Text>
+                                            {item.dangers > 0 && (
+                                                <View style={styles.dangerBadge}>
+                                                    <Text style={styles.dangerText}>⚠ {item.dangers}</Text>
+                                                </View>
+                                            )}
+                                        </LinearGradient>
+                                        <View style={styles.cardBody}>
+                                            <View style={styles.cardStatsRow}>
+                                                <View style={styles.cardStats}>
+                                                    <Text style={styles.cardStat}>{formatDuration(item.duration)}</Text>
+                                                    <Text style={styles.cardStatDot}>·</Text>
+                                                    <Text style={styles.cardStat}>{item.distance_km} km</Text>
+                                                    {item.ascent && (
+                                                        <>
+                                                            <Text style={styles.cardStatDot}>·</Text>
+                                                            <Text style={styles.cardStat}>+{item.ascent}m</Text>
+                                                        </>
+                                                    )}
+                                                </View>
+                                                <View style={[styles.difficultyBadge, { backgroundColor: diffColor + '33', borderColor: diffColor }]}>
+                                                    <Text style={[styles.difficultyText, { color: diffColor }]}>{item.difficulty}</Text>
+                                                </View>
+                                            </View>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            }}
+                        />
+                    )}
+                </View>
 
                 {/* Filter Modal */}
                 <Modal visible={filterVisible} animationType="slide" transparent>
@@ -493,15 +501,15 @@ const styles = StyleSheet.create({
         alignItems: 'center', justifyContent: 'center',
     },
     filterBadgeText:    { fontSize: 10, fontWeight: '700', color: '#2d5a3d' },
-    activeFiltersScroll:{ paddingHorizontal: 24, marginBottom: 8, maxHeight: 40 },
-    activeFiltersRow:   { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    activeFiltersScroll:{ paddingHorizontal: 24, marginBottom: 8 , height: 40 },
+    activeFiltersRow:    { flexDirection: 'row', gap: 8, alignItems: 'center', paddingVertical: 4 },
     activeChip: {
         backgroundColor: 'rgba(248,200,200,0.2)', borderRadius: 99,
-        paddingHorizontal: 12, paddingVertical: 5,
+        paddingHorizontal: 12, paddingVertical: 1,
         borderWidth: 1, borderColor: 'rgba(248,200,200,0.5)',
     },
     activeChipText: { color: '#f8c8c8', fontSize: 12, fontWeight: '600' },
-    centerBox:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+    centerBox:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12},
     centerText: { color: 'rgba(255,255,255,0.6)', fontSize: 14 },
     errorText:  { color: '#fca5a5', fontSize: 14, textAlign: 'center', paddingHorizontal: 24 },
     retryBtn:   { backgroundColor: '#f8c8c8', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 99 },
@@ -513,13 +521,11 @@ const styles = StyleSheet.create({
     },
     cardImageArea:   { height: 100, justifyContent: 'flex-end', padding: 12, position: 'relative' },
     cardTrailName:   { color: 'white', fontSize: 20, fontWeight: '800' },
-    difficultyBadge: { position: 'absolute', top: 10, right: 10, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, borderWidth: 1 },
-    difficultyText:  { fontSize: 11, fontWeight: '700' },
-    dangerBadge:     { position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(239,68,68,0.2)', borderRadius: 99, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: '#f87171' },
+    difficultyBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, borderWidth: 1, marginLeft: 8 },    dangerBadge:     { position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(239,68,68,0.2)', borderRadius: 99, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: '#f87171' },
     dangerText:      { fontSize: 11, color: '#fca5a5', fontWeight: '600' },
-    cardBody:        { padding: 14, gap: 4 },
-    cardStats:       { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 },
-    cardStat:        { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '500' },
+    cardBody:        { padding: 14},
+    cardStats:    { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, flex: 1 },    cardStat:        { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '500' },
+    cardStatsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     cardStatDot:     { color: 'rgba(255,255,255,0.3)', fontSize: 13 },
     modalOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalSheet:      { backgroundColor: '#1e3a2a', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 20, paddingHorizontal: 24, paddingBottom: 36, maxHeight: '90%' },
