@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from database import get_supabase
-from datetime import datetime, timezone
+from datetime import datetime, timezone,timedelta
 import trails as trail_service
 import packing as packing_service
 import hashlib
@@ -103,6 +103,9 @@ async def login_user(credentials: UserLogin):
 
 # ── Pings ─────────────────────────────────────────────────────────────────────
 
+ROMANIA_TZ = timezone(timedelta(hours=2))  # EET (UTC+2), vara pune hours=3
+now = datetime.now(ROMANIA_TZ)
+
 class PingJSON(BaseModel):
     type: str           # varchar
     lat: float          # float8
@@ -122,7 +125,7 @@ async def create_ping(data: PingJSON):
             "lng": data.lng,                    # float8
             "description": data.description,    # text
             "time": now.strftime("%H:%M:%S"),   # timetz
-            "date": datetime.now(timezone.utc).isoformat(),            # timestamptz
+            "date": now,            # timestamptz
         }
 
         # Use your global 'supabase' client we initialized earlier
