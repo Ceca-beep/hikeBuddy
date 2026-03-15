@@ -80,7 +80,7 @@ async def login_user(credentials: UserLogin):
         if not response.data:
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
-        user = response.data[0]
+        user = response.data[0] 
 
         if hash_password(credentials.password) != user["password"]:
             raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -125,7 +125,7 @@ async def create_ping(data: PingJSON):
             "lng": data.lng,                    # float8
             "description": data.description,    # text
             "time": now.strftime("%H:%M:%S"),   # timetz
-            "date": now,            # timestamptz
+            "date": now.isoformat,            # timestamptz
         }
 
         # Use your global 'supabase' client we initialized earlier
