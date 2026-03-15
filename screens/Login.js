@@ -70,7 +70,7 @@ export default function LoginScreen({ navigation }) {
                             <MaterialIcons name="terrain" size={48} color="white" />
                         </View>
                         <Text style={styles.appName}>HikeBuddy</Text>
-                        <Text style={styles.appTagline}>Find your trail companion</Text>
+                        <Text style={styles.appTagline}>Your pocket travel guide</Text>
                     </View>
 
                     {/* Form */}

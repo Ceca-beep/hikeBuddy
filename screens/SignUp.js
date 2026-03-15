@@ -105,7 +105,7 @@ export default function SignUpScreen({ navigation }) {
                             <MaterialIcons name="terrain" size={48} color="white" />
                         </View>
                         <Text style={styles.appName}>HikeBuddy</Text>
-                        <Text style={styles.appTagline}>Find your trail companion</Text>
+                        <Text style={styles.appTagline}>Your pocket travel guide</Text>
                         <View style={styles.mountainRow}>
                             <View style={[styles.mountain, { left: 0, width: 200, height: 80 }]} />
                             <View style={[styles.mountain, { left: 150, width: 250, height: 110 }]} />
