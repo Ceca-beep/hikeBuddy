@@ -104,7 +104,7 @@ async def login_user(credentials: UserLogin):
 # ── Pings ─────────────────────────────────────────────────────────────────────
 
 ROMANIA_TZ = timezone(timedelta(hours=2))  # EET (UTC+2), vara pune hours=3
-now = datetime.now(ROMANIA_TZ)
+
 
 class PingJSON(BaseModel):
     type: str           # varchar
@@ -116,7 +116,7 @@ class PingJSON(BaseModel):
 async def create_ping(data: PingJSON):
     """Report a danger ping on a trail."""
     try:
-        now = datetime.utcnow()
+        now = datetime.now(ROMANIA_TZ)
         
         ping_payload = {
             "id": str(uuid.uuid4()),            # uuid (Required if not auto-gen)
