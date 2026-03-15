@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
-const SEX_OPTIONS = ['Male', 'Female', 'Other'];
+const SEX_OPTIONS = ['Male', 'Female'];
 
 export default function SignUpScreen({ navigation }) {
     const [firstName, setFirstName] = useState('');
