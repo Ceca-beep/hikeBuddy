@@ -79,6 +79,7 @@ export default function Mapscreen({ route, navigation }) {
     const [queueCount, setQueueCount] = useState(0);
     const [syncStatus, setSyncStatus] = useState('online'); // 'online' | 'offline' | 'syncing' | 'synced'
     const isSyncing = useRef(false);
+    const [currentPings, setCurrentPings] = useState(route?.params?.pings || []);
 
     const toggleOfflineMode = async () => {
         const goingOffline = !simulateOffline;
@@ -184,12 +185,12 @@ export default function Mapscreen({ route, navigation }) {
     };
 
     const submitNewPing = async () => {
-        const finalType = dangerType === 'Custom' ? 'Custom' : dangerType;
         const payload = {
             "type": dangerType === 'Custom' ? 'Danger' : dangerType,
             "lat": tempPing.latitude,
             "lng": tempPing.longitude,
-            "description": customDetail
+            "description": customDetail,
+            "id": trail.id || trail.osm_id // ne asigurăm că avem un ID
         };
 
         setIsAddingPing(false);
@@ -199,6 +200,8 @@ export default function Mapscreen({ route, navigation }) {
 
         if (simulateOffline) {
             await saveToQueue(payload);
+            // Adăugăm local cu ID temporar să apară imediat
+            setCurrentPings(prev => [...prev, { ...payload, id: `temp-${Date.now()}`, date: new Date().toISOString() }]);
             setSyncStatus('offline');
             return;
         }
@@ -212,32 +215,49 @@ export default function Mapscreen({ route, navigation }) {
                 },
                 body: JSON.stringify(payload),
             });
+
+            // FIX: Trebuie să citim JSON-ul din răspuns
+            const result = await res.json();
+
             if (res.ok) {
                 alert('Danger reported!');
+                // Dacă backend-ul trimite datele salvate, le punem în listă
+                if (result.data && result.data[0]) {
+                    setCurrentPings(prev => [result.data[0], ...prev]);
+                } else {
+                    // Fallback în caz că backend-ul nu trimite obiectul înapoi, îl punem pe cel trimis de noi
+                    setCurrentPings(prev => [{...payload, id: Date.now()}, ...prev]);
+                }
             } else {
                 await saveToQueue(payload);
                 setSyncStatus('offline');
             }
-        } catch {
+        } catch (e) {
+            console.error("Submit error:", e);
             await saveToQueue(payload);
             setSyncStatus('offline');
         }
     };
 
     const renderSyncBanner = () => {
-        if (syncStatus === 'online' && queueCount === 0) return null;
-        if (syncStatus === 'offline' && queueCount === 0) return null;
+        // Dacă suntem online și nu avem nimic de trimis, nu arătăm nimic
+        if (!simulateOffline && queueCount === 0) return null;
 
         let bgColor, text;
         if (syncStatus === 'syncing') {
-            bgColor = '#b45309';
-            text = `Syncing ${queueCount} ping${queueCount !== 1 ? 's' : ''}...`;
+            bgColor = '#b45309'; // Portocaliu
+            text = `Syncing ${queueCount} pings...`;
         } else if (syncStatus === 'synced') {
-            bgColor = '#15803d';
+            bgColor = '#15803d'; // Verde
             text = '✓ All pings synced!';
+        } else if (simulateOffline) {
+            bgColor = '#4b5563'; // Gri pentru Offline manual
+            text = `Offline Mode · ${queueCount} queued`;
+        } else if (queueCount > 0) {
+            bgColor = '#991b1b'; // Roșu pentru eroare de semnal (ești online dar ai pachete eșuate)
+            text = `Connection issue · ${queueCount} pings waiting`;
         } else {
-            bgColor = '#991b1b';
-            text = `No signal · ${queueCount} ping${queueCount !== 1 ? 's' : ''} waiting to send`;
+            return null;
         }
 
         return (
@@ -294,10 +314,10 @@ export default function Mapscreen({ route, navigation }) {
                 )}
 
                 {/* Danger pings — lat/lng come directly from pings table */}
-                {pings.map((ping) => (
+                {currentPings.map((ping) => (
                     <Marker
-                        key={ping.id}
-                        coordinate={{ latitude: ping.lat, longitude: ping.lng }}
+                        key={ping.id ? String(ping.id) : `ping-${ping.lat}-${ping.lng}-${Math.random()}`}
+                        coordinate={{ latitude: Number(ping.lat), longitude: Number(ping.lng) }}
                         title={ping.type}
                         description={ping.description}
                         pinColor="red"
