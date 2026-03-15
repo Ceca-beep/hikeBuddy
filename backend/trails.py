@@ -1,37 +1,11 @@
-"""
-trails.py — reads from Supabase DB only.
-
-Difficulty mapping:
-    DB value   → Frontend label
-    easy       → Beginner
-    moderate   → Intermediate
-    hard       → Advanced
-    expert     → Expert
-
-Duration buckets:
-    "Under 2h" → 0-120 min
-    "2-4h"     → 120-240 min
-    "4-6h"     → 240-360 min
-    "Over 6h"  → 360+ min
-"""
-
 import math
 from typing import Optional
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
 from database import get_supabase
 
-# ─── Mappings ─────────────────────────────────────────────────────────────────
-
-DB_TO_FRONTEND = {
-    "easy":     "Beginner",
-    "moderate": "Intermediate",
-    "hard":     "Advanced",
-    "expert":   "Expert",
-}
-
+DB_TO_FRONTEND = {"easy": "Beginner", "moderate": "Intermediate", "hard": "Advanced", "expert": "Expert"}
 FRONTEND_TO_DB = {v: k for k, v in DB_TO_FRONTEND.items()}
-
 DURATION_BUCKETS = {
     "Under 2h": (0,   120),
     "2-4h":     (120, 240),
@@ -39,32 +13,17 @@ DURATION_BUCKETS = {
     "Over 6h":  (360, 99999),
 }
 
-DIFFICULTY_COLORS = {
-    "Beginner":     "#4ade80",
-    "Intermediate": "#facc15",
-    "Advanced":     "#fb923c",
-    "Expert":       "#f87171",
-}
-
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-
 def format_duration(minutes: Optional[float]) -> str:
-    if not minutes:
-        return "--"
+    if not minutes: return "--"
     h = int(minutes // 60)
     m = int(minutes % 60)
-    if h > 0 and m > 0:
-        return f"{h}h {m}min"
-    elif h > 0:
-        return f"{h}h"
+    if h > 0 and m > 0: return f"{h}h {m}min"
+    elif h > 0: return f"{h}h"
     return f"{m}min"
 
-
 def map_difficulty(db_value: Optional[str]) -> str:
-    if not db_value:
-        return "Unknown"
+    if not db_value: return "Unknown"
     return DB_TO_FRONTEND.get(db_value.lower(), db_value.capitalize())
-
 
 def format_trail(trail: dict, danger_count: int = 0) -> dict:
     return {
@@ -82,26 +41,22 @@ def format_trail(trail: dict, danger_count: int = 0) -> dict:
         "dangers":       danger_count,
     }
 
-
 def haversine_km(lat1, lon1, lat2, lon2) -> float:
     R = 6371.0
     φ1, φ2 = math.radians(lat1), math.radians(lat2)
     dφ = math.radians(lat2 - lat1)
     dλ = math.radians(lon2 - lon1)
-    a = math.sin(dφ / 2) ** 2 + math.cos(φ1) * math.cos(φ2) * math.sin(dλ / 2) ** 2
+    a = math.sin(dφ/2)**2 + math.cos(φ1)*math.cos(φ2)*math.sin(dλ/2)**2
     return R * 2 * math.asin(math.sqrt(a))
-
 
 def bbox_from_point(lat, lon, radius_km):
     delta_lat = radius_km / 111.0
     delta_lon = radius_km / (111.0 * math.cos(math.radians(lat)))
     return lat - delta_lat, lon - delta_lon, lat + delta_lat, lon + delta_lon
 
-
 def trail_center(trail: dict) -> Optional[tuple]:
     rp = trail.get("route_path")
-    if not rp:
-        return None
+    if not rp: return None
     try:
         coords = []
         if rp.get("type") == "LineString":
@@ -109,13 +64,11 @@ def trail_center(trail: dict) -> Optional[tuple]:
         elif rp.get("type") == "MultiLineString":
             for line in rp["coordinates"]:
                 coords.extend(line)
-        if not coords:
-            return None
+        if not coords: return None
         mid = coords[len(coords) // 2]
         return mid[1], mid[0]
     except Exception:
         return None
-
 
 def _get_danger_counts() -> dict:
     from datetime import datetime, timezone, timedelta
@@ -131,7 +84,6 @@ def _get_danger_counts() -> dict:
         return counts
     except Exception:
         return {}
-
 
 def _get_pings_for_trail(trail_id: str) -> list:
     from datetime import datetime, timezone, timedelta
@@ -150,18 +102,10 @@ def _get_pings_for_trail(trail_id: str) -> list:
     except Exception:
         return []
 
-# ─── get_all_trails ───────────────────────────────────────────────────────────
-
 async def get_all_trails(
-    query: str = None,
-    lat: float = None,
-    lon: float = None,
-    difficulty: str = None,
-    min_dist: float = None,
-    max_dist: float = None,
-    duration: str = None,
-    limit: int = 20,
-    offset: int = 0,
+    query: str = None, lat: float = None, lon: float = None,
+    difficulty: str = None, min_dist: float = None, max_dist: float = None,
+    duration: str = None, limit: int = 20, offset: int = 0,
 ):
     def _query():
         supabase = get_supabase()
@@ -169,19 +113,17 @@ async def get_all_trails(
         min_dur = max_dur = None
         if duration and duration in DURATION_BUCKETS:
             min_dur, max_dur = DURATION_BUCKETS[duration]
-
         q = (
             supabase.table("trails")
-            .select("id, osm_id, name, distance_km, difficulty, "
-                    "ascent, descend, duration, max_elevation, user_made, route_path")
+            .select("id, osm_id, name, distance_km, difficulty, ascent, descend, duration, max_elevation, user_made, route_path")
             .range(offset, offset + limit - 1)
         )
-        if query:      q = q.ilike("name", f"%{query}%")
-        if diff_db:    q = q.eq("difficulty", diff_db)
-        if min_dist:   q = q.gte("distance_km", min_dist)
-        if max_dist:   q = q.lte("distance_km", max_dist)
-        if min_dur:    q = q.gte("duration", min_dur)
-        if max_dur:    q = q.lte("duration", max_dur)
+        if query:    q = q.ilike("name", f"%{query}%")
+        if diff_db:  q = q.eq("difficulty", diff_db)
+        if min_dist: q = q.gte("distance_km", min_dist)
+        if max_dist: q = q.lte("distance_km", max_dist)
+        if min_dur:  q = q.gte("duration", min_dur)
+        if max_dur:  q = q.lte("duration", max_dur)
         return q.execute()
 
     response      = await run_in_threadpool(_query)
@@ -194,9 +136,7 @@ async def get_all_trails(
         if lat and lon:
             center = trail_center(t)
             if center:
-                trail_out["distance_from_you_km"] = round(
-                    haversine_km(lat, lon, center[0], center[1]), 2
-                )
+                trail_out["distance_from_you_km"] = round(haversine_km(lat, lon, center[0], center[1]), 2)
         results.append(trail_out)
 
     if lat and lon:
@@ -204,19 +144,13 @@ async def get_all_trails(
 
     return {"trails": results, "count": len(results), "offset": offset}
 
-# ─── get_nearby_trails ────────────────────────────────────────────────────────
-
 async def get_nearby_trails(lat: float, lon: float, radius_km: float = 25, limit: int = 20):
     min_lat, min_lon, max_lat, max_lon = bbox_from_point(lat, lon, radius_km)
 
     def _query():
-        supabase = get_supabase()
-        return (
-            supabase.table("trails")
-            .select("id, osm_id, name, distance_km, difficulty, "
-                    "ascent, descend, duration, max_elevation, user_made, route_path")
-            .execute()
-        )
+        return get_supabase().table("trails").select(
+            "id, osm_id, name, distance_km, difficulty, ascent, descend, duration, max_elevation, user_made, route_path"
+        ).execute()
 
     response      = await run_in_threadpool(_query)
     danger_counts = await run_in_threadpool(_get_danger_counts)
@@ -224,11 +158,9 @@ async def get_nearby_trails(lat: float, lon: float, radius_km: float = 25, limit
     results = []
     for trail in response.data or []:
         center = trail_center(trail)
-        if not center:
-            continue
+        if not center: continue
         t_lat, t_lon = center
-        if not (min_lat <= t_lat <= max_lat and min_lon <= t_lon <= max_lon):
-            continue
+        if not (min_lat <= t_lat <= max_lat and min_lon <= t_lon <= max_lon): continue
         dist = haversine_km(lat, lon, t_lat, t_lon)
         if dist <= radius_km:
             trail_out = format_trail(trail, danger_counts.get(trail["id"], 0))
@@ -239,8 +171,6 @@ async def get_nearby_trails(lat: float, lon: float, radius_km: float = 25, limit
 
     results.sort(key=lambda t: t["distance_from_you_km"])
     return {"trails": results[:limit], "count": len(results[:limit])}
-
-# ─── get_trail_detail_from_api ────────────────────────────────────────────────
 
 async def get_trail_detail_from_api(trail_id: str):
     def _query():
@@ -275,19 +205,13 @@ async def get_trail_detail_from_api(trail_id: str):
         "pings":         pings,
     }
 
-# ─── submit_trail ─────────────────────────────────────────────────────────────
-
 async def submit_trail(trail_data: dict):
     required = {"name", "route_path"}
     missing = required - trail_data.keys()
     if missing:
         raise HTTPException(status_code=422, detail=f"Missing: {', '.join(missing)}")
-
     if "difficulty" in trail_data:
-        trail_data["difficulty"] = FRONTEND_TO_DB.get(
-            trail_data["difficulty"], trail_data["difficulty"].lower()
-        )
-
+        trail_data["difficulty"] = FRONTEND_TO_DB.get(trail_data["difficulty"], trail_data["difficulty"].lower())
     row = {
         "name":        trail_data["name"],
         "route_path":  trail_data["route_path"],
@@ -298,11 +222,8 @@ async def submit_trail(trail_data: dict):
         "descend":     trail_data.get("descend"),
         "duration":    trail_data.get("duration"),
     }
-
     def _insert():
-        supabase = get_supabase()
-        return supabase.table("trails").insert(row).execute()
-
+        return get_supabase().table("trails").insert(row).execute()
     response = await run_in_threadpool(_insert)
     if not response.data:
         raise HTTPException(status_code=500, detail="Failed to submit trail")
