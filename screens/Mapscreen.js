@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -11,11 +11,13 @@ import {
     TextInput,
 } from 'react-native';
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 
 const { width, height } = Dimensions.get('window');
+const QUEUE_KEY = 'pending_pings';
+const API_URL = 'https://summarisable-subarticulative-queenie.ngrok-free.dev/pings';
 
-// ─── Convert GeoJSON route_path → react-native-maps coordinates ──────────────
-// GeoJSON stores [longitude, latitude], react-native-maps needs {latitude, longitude}
 const geojsonToCoords = (routePath) => {
     if (!routePath) return [];
 
@@ -73,6 +75,91 @@ export default function Mapscreen({ route, navigation }) {
     const [dangerType, setDangerType] = useState('');
     const [customDetail, setCustomDetail] = useState('');
 
+    const [simulateOffline, setSimulateOffline] = useState(false);
+    const [queueCount, setQueueCount] = useState(0);
+    const [syncStatus, setSyncStatus] = useState('online'); // 'online' | 'offline' | 'syncing' | 'synced'
+    const isSyncing = useRef(false);
+
+    const toggleOfflineMode = async () => {
+        const goingOffline = !simulateOffline;
+        setSimulateOffline(goingOffline);
+        if (!goingOffline) {
+            // revine online → flush
+            await flushQueue();
+        } else {
+            setSyncStatus('offline');
+        }
+    };
+
+    useEffect(() => {
+        loadQueueCount();
+    }, []);
+
+    const loadQueueCount = async () => {
+        try {
+            const raw = await AsyncStorage.getItem(QUEUE_KEY);
+            const queue = raw ? JSON.parse(raw) : [];
+            setQueueCount(queue.length);
+        } catch (e) {
+            console.error('Failed to load queue:', e);
+        }
+    };
+
+    const saveToQueue = async (payload) => {
+        try {
+            const raw = await AsyncStorage.getItem(QUEUE_KEY);
+            const queue = raw ? JSON.parse(raw) : [];
+            queue.push(payload);
+            await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+            setQueueCount(queue.length);
+        } catch (e) {
+            console.error('Failed to save to queue:', e);
+        }
+    };
+
+    const flushQueue = async () => {
+        if (isSyncing.current) return;
+        try {
+            const raw = await AsyncStorage.getItem(QUEUE_KEY);
+            const queue = raw ? JSON.parse(raw) : [];
+            if (queue.length === 0) return;
+
+            isSyncing.current = true;
+            setSyncStatus('syncing');
+
+            const failed = [];
+            for (const payload of queue) {
+                try {
+                    const res = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'ngrok-skip-browser-warning': 'true',
+                        },
+                        body: JSON.stringify(payload),
+                    });
+                    if (!res.ok) failed.push(payload);
+                } catch {
+                    failed.push(payload);
+                }
+            }
+
+            await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(failed));
+            setQueueCount(failed.length);
+            setSyncStatus(failed.length === 0 ? 'synced' : 'offline');
+
+            // "synced" banner dispare după 3 secunde
+            if (failed.length === 0) {
+                setTimeout(() => setSyncStatus('online'), 3000);
+            }
+        } catch (e) {
+            console.error('Flush error:', e);
+            setSyncStatus('offline');
+        } finally {
+            isSyncing.current = false;
+        }
+    };
+
     useEffect(() => {
         if (trail?.route_path) {
             const coords = geojsonToCoords(trail.route_path);
@@ -105,29 +192,59 @@ export default function Mapscreen({ route, navigation }) {
             "description": customDetail
         };
 
+        setIsAddingPing(false);
+        setTempPing(null);
+        setDangerType('');
+        setCustomDetail('');
+
+        if (simulateOffline) {
+            await saveToQueue(payload);
+            setSyncStatus('offline');
+            return;
+        }
+
         try {
-            const res = await fetch('https://summarisable-subarticulative-queenie.ngrok-free.dev/pings', {
+            const res = await fetch(API_URL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'ngrok-skip-browser-warning': 'true'
+                    'ngrok-skip-browser-warning': 'true',
                 },
                 body: JSON.stringify(payload),
             });
             if (res.ok) {
-                setIsAddingPing(false);
-                setTempPing(null);
-                setDangerType('');
-                setCustomDetail('');
                 alert('Danger reported!');
-            }else {
-                const errorData = await res.json();
-                alert('Server error: ' + (errorData.detail || 'Unknown error'));
+            } else {
+                await saveToQueue(payload);
+                setSyncStatus('offline');
             }
-        } catch (e) {
-            console.error(e);
-            alert('Network error - check your connection');
+        } catch {
+            await saveToQueue(payload);
+            setSyncStatus('offline');
         }
+    };
+
+    const renderSyncBanner = () => {
+        if (syncStatus === 'online' && queueCount === 0) return null;
+        if (syncStatus === 'offline' && queueCount === 0) return null;
+
+        let bgColor, text;
+        if (syncStatus === 'syncing') {
+            bgColor = '#b45309';
+            text = `Syncing ${queueCount} ping${queueCount !== 1 ? 's' : ''}...`;
+        } else if (syncStatus === 'synced') {
+            bgColor = '#15803d';
+            text = '✓ All pings synced!';
+        } else {
+            bgColor = '#991b1b';
+            text = `No signal · ${queueCount} ping${queueCount !== 1 ? 's' : ''} waiting to send`;
+        }
+
+        return (
+            <View style={[styles.syncBanner, { backgroundColor: bgColor }]}>
+                <Text style={styles.syncBannerText}>{text}</Text>
+            </View>
+        );
     };
 
     if (loading || !region) {
@@ -228,15 +345,24 @@ export default function Mapscreen({ route, navigation }) {
             </Modal>
             {/* Back button + trail name */}
             <SafeAreaView style={styles.topOverlay}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => navigation?.goBack()}>
-                    <Text style={styles.backText}>← Back</Text>
-                </TouchableOpacity>
+                <View style={styles.topRow}>
+                    <TouchableOpacity style={styles.backBtn} onPress={() => navigation?.goBack()}>
+                        <Text style={styles.backText}>← Back</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.offlineBtn, simulateOffline && styles.offlineBtnActive]}
+                        onPress={toggleOfflineMode}
+                    >
+                        <Text style={styles.offlineBtnText}>
+                            {simulateOffline ? 'Offline' : 'Online'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
                 <View style={styles.trailPill}>
                     <Text style={styles.trailPillName}>{trail.name}</Text>
-                    <Text style={styles.trailPillSub}>
-                        {trail.distance_km} km · {trail.duration}h
-                    </Text>
+                    <Text style={styles.trailPillSub}>{trail.distance_km} km · {trail.duration}h</Text>
                 </View>
+                {renderSyncBanner()}
             </SafeAreaView>
 
             {/* Ping popup when marker is tapped */}
@@ -338,6 +464,12 @@ const styles = StyleSheet.create({
     },
     trailPillName: { color: 'white', fontWeight: '700', fontSize: 15 },
     trailPillSub: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 2 },
+    syncBanner: {
+        alignSelf: 'center',
+        paddingHorizontal: 16, paddingVertical: 8,
+        borderRadius: 99,
+    },
+    syncBannerText: { color: 'white', fontSize: 12, fontWeight: '600' },
     pingPopup: {
         position: 'absolute',
         bottom: 100,
@@ -429,4 +561,28 @@ const styles = StyleSheet.create({
         fontSize: 16,
         marginBottom: 20
     },
+    topRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+    },
+    offlineBtn: {
+        backgroundColor: 'rgba(30,58,42,0.9)',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 99,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)',
+    },
+    offlineBtnActive: {
+        backgroundColor: 'rgba(153,27,27,0.9)',
+        borderColor: '#f87171',
+    },
+    offlineBtnText: {
+        color: 'white',
+        fontSize: 13,
+        fontWeight: '600',
+    },
+
 });
