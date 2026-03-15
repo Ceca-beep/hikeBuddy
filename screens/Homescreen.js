@@ -13,11 +13,18 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar } from 'react-native-calendars';
-import { API_BASE, API_HEADERS } from './Api';
+import { API_BASE, API_HEADERS } from './api';
 
 const DIFFICULTY_OPTIONS = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 const FITNESS_OPTIONS    = ['Low', 'Medium', 'High', 'Athlete'];
 const DURATION_OPTIONS   = ['Under 2h', '2-4h', '4-6h', 'Over 6h'];
+const DISTANCE_OPTIONS   = [
+    { label: 'Any',       min: null, max: null  },
+    { label: 'Under 5km', min: null, max: 5     },
+    { label: '5–15km',    min: 5,    max: 15    },
+    { label: '15–30km',   min: 15,   max: 30    },
+    { label: 'Over 30km', min: 30,   max: null  },
+];
 
 const DIFFICULTY_COLORS = {
     Beginner:     '#4ade80',
@@ -28,7 +35,7 @@ const DIFFICULTY_COLORS = {
 
 const buildMarkedDates = (start, end) => {
     if (!start) return {};
-    const marked = {};
+    const marked     = {};
     const startColor = '#f8c8c8';
     const rangeColor = 'rgba(248,200,200,0.25)';
     if (!end || start === end) {
@@ -39,9 +46,9 @@ const buildMarkedDates = (start, end) => {
     const endDate = new Date(end);
     while (current <= endDate) {
         const dateStr = current.toISOString().split('T')[0];
-        if (dateStr === start)      marked[dateStr] = { startingDay: true, color: startColor, textColor: '#2d5a3d' };
-        else if (dateStr === end)   marked[dateStr] = { endingDay: true, color: startColor, textColor: '#2d5a3d' };
-        else                        marked[dateStr] = { color: rangeColor, textColor: 'white' };
+        if (dateStr === start)    marked[dateStr] = { startingDay: true, color: startColor, textColor: '#2d5a3d' };
+        else if (dateStr === end) marked[dateStr] = { endingDay: true, color: startColor, textColor: '#2d5a3d' };
+        else                      marked[dateStr] = { color: rangeColor, textColor: 'white' };
         current.setDate(current.getDate() + 1);
     }
     return marked;
@@ -67,29 +74,36 @@ export default function HomeScreen({ navigation }) {
     const [search,        setSearch]        = useState('');
     const [filterVisible, setFilterVisible] = useState(false);
 
+    // Applied filters
     const [selectedDifficulty, setSelectedDifficulty] = useState([]);
+    const [selectedFitness,    setSelectedFitness]    = useState('Medium');
     const [selectedDuration,   setSelectedDuration]   = useState([]);
+    const [selectedDistance,   setSelectedDistance]   = useState('Any');
     const [startDate,          setStartDate]          = useState('');
     const [endDate,            setEndDate]            = useState('');
 
+    // Pending (inside modal)
     const [pendingDifficulty, setPendingDifficulty] = useState([]);
-    const [pendingFitness,    setPendingFitness]    = useState([]);
+    const [pendingFitness,    setPendingFitness]    = useState('Medium');
     const [pendingDuration,   setPendingDuration]   = useState([]);
+    const [pendingDistance,   setPendingDistance]   = useState('Any');
     const [pendingStart,      setPendingStart]      = useState('');
     const [pendingEnd,        setPendingEnd]        = useState('');
 
-    // ── Fetch trails from backend ─────────────────────────────────────────────
+    // ── Fetch trails ──────────────────────────────────────────────────────────
     const fetchTrails = async (params = {}) => {
         setLoading(true);
         setError(null);
         try {
-            const query = new URLSearchParams();
-            if (params.query)      query.append('query', params.query);
-            if (params.difficulty) query.append('difficulty', params.difficulty);
-            if (params.duration)   query.append('duration', params.duration);
-            query.append('limit', '50');
+            const q = new URLSearchParams();
+            if (params.query)      q.append('query',      params.query);
+            if (params.difficulty) q.append('difficulty', params.difficulty);
+            if (params.duration)   q.append('duration',   params.duration);
+            if (params.min_dist)   q.append('min_dist',   params.min_dist);
+            if (params.max_dist)   q.append('max_dist',   params.max_dist);
+            q.append('limit', '50');
 
-            const resp = await fetch(`${API_BASE}/trails?${query.toString()}`, {
+            const resp = await fetch(`${API_BASE}/trails?${q.toString()}`, {
                 headers: API_HEADERS,
             });
             const data = await resp.json();
@@ -102,26 +116,29 @@ export default function HomeScreen({ navigation }) {
         }
     };
 
-    useEffect(() => {
-        fetchTrails();
-    }, []);
+    useEffect(() => { fetchTrails(); }, []);
 
-    // Re-fetch when search changes (debounced)
+    // Debounced re-fetch when filters change
     useEffect(() => {
+        const distObj = DISTANCE_OPTIONS.find(d => d.label === selectedDistance);
         const timer = setTimeout(() => {
             fetchTrails({
-                query:      search || undefined,
+                query:      search       || undefined,
                 difficulty: selectedDifficulty[0] || undefined,
                 duration:   selectedDuration[0]   || undefined,
+                min_dist:   distObj?.min  || undefined,
+                max_dist:   distObj?.max  || undefined,
             });
         }, 400);
         return () => clearTimeout(timer);
-    }, [search, selectedDifficulty, selectedDuration]);
+    }, [search, selectedDifficulty, selectedDuration, selectedDistance]);
 
+    // ── Filter modal ──────────────────────────────────────────────────────────
     const openFilters = () => {
         setPendingDifficulty([...selectedDifficulty]);
-        setPendingFitness([]);
+        setPendingFitness(selectedFitness);
         setPendingDuration([...selectedDuration]);
+        setPendingDistance(selectedDistance);
         setPendingStart(startDate);
         setPendingEnd(endDate);
         setFilterVisible(true);
@@ -129,7 +146,9 @@ export default function HomeScreen({ navigation }) {
 
     const applyFilters = () => {
         setSelectedDifficulty(pendingDifficulty);
+        setSelectedFitness(pendingFitness);
         setSelectedDuration(pendingDuration);
+        setSelectedDistance(pendingDistance);
         setStartDate(pendingStart);
         setEndDate(pendingEnd);
         setFilterVisible(false);
@@ -137,8 +156,9 @@ export default function HomeScreen({ navigation }) {
 
     const clearFilters = () => {
         setPendingDifficulty([]);
-        setPendingFitness([]);
+        setPendingFitness('Medium');
         setPendingDuration([]);
+        setPendingDistance('Any');
         setPendingStart('');
         setPendingEnd('');
     };
@@ -157,28 +177,47 @@ export default function HomeScreen({ navigation }) {
         }
     };
 
-    const toggle = (value, list, setList) => {
+    const toggleList = (value, list, setList) => {
         if (list.includes(value)) setList(list.filter(v => v !== value));
         else setList([...list, value]);
     };
 
     const activeFilterCount =
-        selectedDifficulty.length + selectedDuration.length + (startDate ? 1 : 0);
+        selectedDifficulty.length +
+        selectedDuration.length +
+        (selectedDistance !== 'Any' ? 1 : 0) +
+        (startDate ? 1 : 0) +
+        (selectedFitness !== 'Medium' ? 1 : 0);
 
-    const ChipGroup = ({ label, options, selected, onToggle }) => (
+    const openTrail = (trail) => {
+        navigation?.navigate('TrailDetail', {
+            trail,
+            date:    startDate || null,
+            fitness: selectedFitness,
+        });
+    };
+
+    // ── Chip group component ──────────────────────────────────────────────────
+    const ChipGroup = ({ label, options, selected, onToggle, single = false, isObjects = false }) => (
         <View style={styles.chipSection}>
             <Text style={styles.chipSectionLabel}>{label}</Text>
             <View style={styles.chipRow}>
                 {options.map((opt) => {
-                    const active = selected.includes(opt);
+                    const key    = isObjects ? opt.label : opt;
+                    const active = single
+                        ? selected === key
+                        : selected.includes(key);
                     return (
                         <TouchableOpacity
-                            key={opt}
+                            key={key}
                             style={[styles.chip, active && styles.chipActive]}
-                            onPress={() => onToggle(opt)}
+                            onPress={() => single
+                                ? onToggle(key)
+                                : toggleList(key, selected, onToggle)
+                            }
                             activeOpacity={0.8}
                         >
-                            <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt}</Text>
+                            <Text style={[styles.chipText, active && styles.chipTextActive]}>{key}</Text>
                         </TouchableOpacity>
                     );
                 })}
@@ -193,6 +232,7 @@ export default function HomeScreen({ navigation }) {
                 {/* Header */}
                 <View style={styles.header}>
                     <View>
+                        <Text style={styles.greeting}>Hello!</Text>
                         <Text style={styles.headerTitle}>Where are we hiking?</Text>
                     </View>
                     <View style={styles.avatarCircle}>
@@ -225,13 +265,41 @@ export default function HomeScreen({ navigation }) {
                     </TouchableOpacity>
                 </View>
 
-                {startDate ? (
-                    <View style={styles.activeDateRow}>
-                        <Text style={styles.activeDateText}>
-                            {formatDate(startDate)}{endDate ? ` → ${formatDate(endDate)}` : ''}
-                        </Text>
-                    </View>
-                ) : null}
+                {/* Active filter chips */}
+                {activeFilterCount > 0 && (
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.activeFiltersScroll}
+                        contentContainerStyle={styles.activeFiltersRow}
+                    >
+                        {selectedDifficulty.map(d => (
+                            <TouchableOpacity key={d} style={styles.activeChip} onPress={() => setSelectedDifficulty(selectedDifficulty.filter(x => x !== d))}>
+                                <Text style={styles.activeChipText}>{d} ✕</Text>
+                            </TouchableOpacity>
+                        ))}
+                        {selectedDuration.map(d => (
+                            <TouchableOpacity key={d} style={styles.activeChip} onPress={() => setSelectedDuration(selectedDuration.filter(x => x !== d))}>
+                                <Text style={styles.activeChipText}>{d} ✕</Text>
+                            </TouchableOpacity>
+                        ))}
+                        {selectedDistance !== 'Any' && (
+                            <TouchableOpacity style={styles.activeChip} onPress={() => setSelectedDistance('Any')}>
+                                <Text style={styles.activeChipText}>{selectedDistance} ✕</Text>
+                            </TouchableOpacity>
+                        )}
+                        {startDate && (
+                            <TouchableOpacity style={styles.activeChip} onPress={() => { setStartDate(''); setEndDate(''); }}>
+                                <Text style={styles.activeChipText}>📅 {formatDate(startDate)} ✕</Text>
+                            </TouchableOpacity>
+                        )}
+                        {selectedFitness !== 'Medium' && (
+                            <TouchableOpacity style={styles.activeChip} onPress={() => setSelectedFitness('Medium')}>
+                                <Text style={styles.activeChipText}>🏃 {selectedFitness} ✕</Text>
+                            </TouchableOpacity>
+                        )}
+                    </ScrollView>
+                )}
 
                 {/* Trail list */}
                 {loading ? (
@@ -246,6 +314,13 @@ export default function HomeScreen({ navigation }) {
                             <Text style={styles.retryText}>Retry</Text>
                         </TouchableOpacity>
                     </View>
+                ) : trails.length === 0 ? (
+                    <View style={styles.centerBox}>
+                        <Text style={styles.centerText}>No trails match your filters.</Text>
+                        <TouchableOpacity style={styles.retryBtn} onPress={clearFilters}>
+                            <Text style={styles.retryText}>Clear filters</Text>
+                        </TouchableOpacity>
+                    </View>
                 ) : (
                     <FlatList
                         data={trails}
@@ -258,16 +333,16 @@ export default function HomeScreen({ navigation }) {
                                 <TouchableOpacity
                                     style={styles.card}
                                     activeOpacity={0.9}
-                                    onPress={() => navigation?.navigate('TrailDetail', { trail: item })}
+                                    onPress={() => openTrail(item)}
                                 >
                                     <LinearGradient colors={['#1a3a2a', '#2d5a3d']} style={styles.cardImageArea}>
-                                        <Text style={styles.cardTrailName}>{item.name}</Text>
+                                        <Text style={styles.cardTrailName} numberOfLines={1}>{item.name}</Text>
                                         <View style={[styles.difficultyBadge, { backgroundColor: diffColor + '33', borderColor: diffColor }]}>
                                             <Text style={[styles.difficultyText, { color: diffColor }]}>{item.difficulty}</Text>
                                         </View>
                                         {item.dangers > 0 && (
                                             <View style={styles.dangerBadge}>
-                                                <Text style={styles.dangerText}>! {item.dangers} danger{item.dangers > 1 ? 's' : ''}</Text>
+                                                <Text style={styles.dangerText}>⚠ {item.dangers}</Text>
                                             </View>
                                         )}
                                     </LinearGradient>
@@ -301,14 +376,17 @@ export default function HomeScreen({ navigation }) {
                                 </TouchableOpacity>
                             </View>
                             <ScrollView showsVerticalScrollIndicator={false}>
+
+                                {/* Date */}
                                 <View style={styles.chipSection}>
-                                    <Text style={styles.chipSectionLabel}>Select a date range</Text>
+                                    <Text style={styles.chipSectionLabel}>Hike date</Text>
+                                    <Text style={styles.dateHint}>Used for weather forecasts and gear suggestions.</Text>
                                     {pendingStart ? (
                                         <Text style={styles.dateSelectedText}>
-                                            {formatDate(pendingStart)}{pendingEnd ? ` → ${formatDate(pendingEnd)}` : ' → select end date'}
+                                            {formatDate(pendingStart)}{pendingEnd ? ` → ${formatDate(pendingEnd)}` : ''}
                                         </Text>
                                     ) : (
-                                        <Text style={styles.dateSelectedText}>Select start date</Text>
+                                        <Text style={styles.dateSelectedText}>Tap a day to select</Text>
                                     )}
                                     <Calendar
                                         onDayPress={handleDayPress}
@@ -333,28 +411,38 @@ export default function HomeScreen({ navigation }) {
                                         style={styles.calendar}
                                     />
                                 </View>
+
                                 <ChipGroup
-                                    label="Experience"
+                                    label="Experience level"
                                     options={DIFFICULTY_OPTIONS}
                                     selected={pendingDifficulty}
-                                    onToggle={(v) => toggle(v, pendingDifficulty, setPendingDifficulty)}
+                                    onToggle={setPendingDifficulty}
                                 />
                                 <ChipGroup
                                     label="Physical fitness"
                                     options={FITNESS_OPTIONS}
                                     selected={pendingFitness}
-                                    onToggle={(v) => toggle(v, pendingFitness, setPendingFitness)}
+                                    onToggle={setPendingFitness}
+                                    single={true}
                                 />
                                 <ChipGroup
                                     label="Duration"
                                     options={DURATION_OPTIONS}
                                     selected={pendingDuration}
-                                    onToggle={(v) => toggle(v, pendingDuration, setPendingDuration)}
+                                    onToggle={setPendingDuration}
                                 />
+                                <ChipGroup
+                                    label="Distance"
+                                    options={DISTANCE_OPTIONS.map(d => d.label)}
+                                    selected={pendingDistance}
+                                    onToggle={setPendingDistance}
+                                    single={true}
+                                />
+
                             </ScrollView>
                             <View style={styles.modalFooter}>
                                 <TouchableOpacity style={styles.clearBtn} onPress={clearFilters} activeOpacity={0.8}>
-                                    <Text style={styles.clearBtnText}>Clear</Text>
+                                    <Text style={styles.clearBtnText}>Clear all</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.applyBtn} onPress={applyFilters} activeOpacity={0.9}>
                                     <Text style={styles.applyBtnText}>Apply filters</Text>
@@ -400,14 +488,20 @@ const styles = StyleSheet.create({
     hamburger:     { gap: 4, alignItems: 'center', justifyContent: 'center' },
     hamburgerLine: { width: 18, height: 2, backgroundColor: 'white', borderRadius: 2 },
     filterBadge: {
-        position: 'absolute', top: 6, right: 6,
-        width: 16, height: 16, borderRadius: 8,
-        backgroundColor: '#f8c8c8', alignItems: 'center', justifyContent: 'center',
+        position: 'absolute', top: 6, right: 6, width: 16, height: 16,
+        borderRadius: 8, backgroundColor: '#f8c8c8',
+        alignItems: 'center', justifyContent: 'center',
     },
-    filterBadgeText: { fontSize: 10, fontWeight: '700', color: '#2d5a3d' },
-    activeDateRow:   { paddingHorizontal: 24, marginBottom: 8 },
-    activeDateText:  { color: '#f8c8c8', fontSize: 13, fontWeight: '600' },
-    centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+    filterBadgeText:    { fontSize: 10, fontWeight: '700', color: '#2d5a3d' },
+    activeFiltersScroll:{ paddingHorizontal: 24, marginBottom: 8, maxHeight: 40 },
+    activeFiltersRow:   { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    activeChip: {
+        backgroundColor: 'rgba(248,200,200,0.2)', borderRadius: 99,
+        paddingHorizontal: 12, paddingVertical: 5,
+        borderWidth: 1, borderColor: 'rgba(248,200,200,0.5)',
+    },
+    activeChipText: { color: '#f8c8c8', fontSize: 12, fontWeight: '600' },
+    centerBox:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
     centerText: { color: 'rgba(255,255,255,0.6)', fontSize: 14 },
     errorText:  { color: '#fca5a5', fontSize: 14, textAlign: 'center', paddingHorizontal: 24 },
     retryBtn:   { backgroundColor: '#f8c8c8', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 99 },
@@ -417,44 +511,34 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 16,
         overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
     },
-    cardImageArea: { height: 100, justifyContent: 'flex-end', padding: 12, position: 'relative' },
-    cardTrailName: { color: 'white', fontSize: 20, fontWeight: '800' },
-    difficultyBadge: {
-        position: 'absolute', top: 10, right: 10,
-        paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, borderWidth: 1,
-    },
-    difficultyText: { fontSize: 11, fontWeight: '700' },
-    dangerBadge: {
-        position: 'absolute', top: 10, left: 10,
-        backgroundColor: 'rgba(239,68,68,0.2)', borderRadius: 99,
-        paddingHorizontal: 8, paddingVertical: 4,
-        borderWidth: 1, borderColor: '#f87171',
-    },
-    dangerText: { fontSize: 11, color: '#fca5a5', fontWeight: '600' },
-    cardBody:   { padding: 14, gap: 4 },
-    cardStats:  { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 },
-    cardStat:   { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '500' },
-    cardStatDot:{ color: 'rgba(255,255,255,0.3)', fontSize: 13 },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalSheet: {
-        backgroundColor: '#1e3a2a', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-        paddingTop: 20, paddingHorizontal: 24, paddingBottom: 36, maxHeight: '90%',
-    },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    modalTitle:  { color: 'white', fontSize: 20, fontWeight: '800' },
-    modalClose:  { color: 'rgba(255,255,255,0.6)', fontSize: 20, padding: 4 },
-    chipSection: { marginBottom: 20 },
-    chipSectionLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 },
-    dateSelectedText: { color: '#f8c8c8', fontSize: 14, fontWeight: '600', marginBottom: 10 },
-    calendar:    { borderRadius: 12, overflow: 'hidden' },
-    chipRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    chip:        { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 99, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' },
-    chipActive:  { backgroundColor: 'rgba(248,200,200,0.25)', borderColor: '#f8c8c8' },
-    chipText:    { color: 'rgba(255,255,255,0.7)', fontSize: 14, fontWeight: '500' },
-    chipTextActive: { color: 'white', fontWeight: '700' },
-    modalFooter: { flexDirection: 'row', gap: 12, marginTop: 24 },
-    clearBtn:    { flex: 1, paddingVertical: 16, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' },
-    clearBtnText:{ color: 'rgba(255,255,255,0.7)', fontWeight: '600', fontSize: 15 },
-    applyBtn:    { flex: 2, paddingVertical: 16, borderRadius: 14, alignItems: 'center', backgroundColor: '#f8c8c8' },
-    applyBtnText:{ color: '#2d5a3d', fontWeight: '700', fontSize: 15 },
+    cardImageArea:   { height: 100, justifyContent: 'flex-end', padding: 12, position: 'relative' },
+    cardTrailName:   { color: 'white', fontSize: 20, fontWeight: '800' },
+    difficultyBadge: { position: 'absolute', top: 10, right: 10, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, borderWidth: 1 },
+    difficultyText:  { fontSize: 11, fontWeight: '700' },
+    dangerBadge:     { position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(239,68,68,0.2)', borderRadius: 99, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: '#f87171' },
+    dangerText:      { fontSize: 11, color: '#fca5a5', fontWeight: '600' },
+    cardBody:        { padding: 14, gap: 4 },
+    cardStats:       { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 },
+    cardStat:        { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '500' },
+    cardStatDot:     { color: 'rgba(255,255,255,0.3)', fontSize: 13 },
+    modalOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    modalSheet:      { backgroundColor: '#1e3a2a', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 20, paddingHorizontal: 24, paddingBottom: 36, maxHeight: '90%' },
+    modalHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    modalTitle:      { color: 'white', fontSize: 20, fontWeight: '800' },
+    modalClose:      { color: 'rgba(255,255,255,0.6)', fontSize: 20, padding: 4 },
+    chipSection:     { marginBottom: 20 },
+    chipSectionLabel:{ color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '700', letterSpacing: 0.5, marginBottom: 6 },
+    dateHint:        { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginBottom: 8, fontStyle: 'italic' },
+    dateSelectedText:{ color: '#f8c8c8', fontSize: 14, fontWeight: '600', marginBottom: 10 },
+    calendar:        { borderRadius: 12, overflow: 'hidden' },
+    chipRow:         { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    chip:            { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 99, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' },
+    chipActive:      { backgroundColor: 'rgba(248,200,200,0.25)', borderColor: '#f8c8c8' },
+    chipText:        { color: 'rgba(255,255,255,0.7)', fontSize: 14, fontWeight: '500' },
+    chipTextActive:  { color: 'white', fontWeight: '700' },
+    modalFooter:     { flexDirection: 'row', gap: 12, marginTop: 24 },
+    clearBtn:        { flex: 1, paddingVertical: 16, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' },
+    clearBtnText:    { color: 'rgba(255,255,255,0.7)', fontWeight: '600', fontSize: 15 },
+    applyBtn:        { flex: 2, paddingVertical: 16, borderRadius: 14, alignItems: 'center', backgroundColor: '#f8c8c8' },
+    applyBtnText:    { color: '#2d5a3d', fontWeight: '700', fontSize: 15 },
 });
