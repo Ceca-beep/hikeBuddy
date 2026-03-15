@@ -2,10 +2,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from database import get_supabase
-from datetime import datetime
+from datetime import datetime, timezone,timedelta
 import trails as trail_service
 import packing as packing_service
-import suggestions as suggestions_service
 import hashlib
 import uuid
 
@@ -81,7 +80,7 @@ async def login_user(credentials: UserLogin):
         if not response.data:
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
-        user = response.data[0]
+        user = response.data[0] 
 
         if hash_password(credentials.password) != user["password"]:
             raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -104,42 +103,51 @@ async def login_user(credentials: UserLogin):
 
 # ── Pings ─────────────────────────────────────────────────────────────────────
 
-class PingJSON(BaseModel):
-    type:        str
-    lat:         float
-    lng:         float
-    description: str = ""
-    trail_id:    str = None
+ROMANIA_TZ = timezone(timedelta(hours=2))  # EET (UTC+2), vara pune hours=3
 
+
+class PingJSON(BaseModel):
+    type: str           # varchar
+    lat: float          # float8
+    lng: float          # float8
+    description: str    # text
 
 @app.post("/pings")
 async def create_ping(data: PingJSON):
+    """Report a danger ping on a trail."""
     try:
+        now = datetime.now(ROMANIA_TZ)
+        
         ping_payload = {
-            "type":        data.type,
-            "lat":         data.lat,
-            "lng":         data.lng,
-            "description": data.description,
-            "date":        datetime.utcnow().isoformat(),
+            "id": str(uuid.uuid4()),            # uuid (Required if not auto-gen)
+            "type": data.type,                  # varchar
+            "lat": data.lat,                    # float8
+            "lng": data.lng,                    # float8
+            "description": data.description,    # text
+            "time": now.strftime("%H:%M:%S"),   # timetz
+            "date": now.isoformat(),            # timestamptz
         }
-        if data.trail_id:
-            ping_payload["trail_id"] = data.trail_id
 
+        # Use your global 'supabase' client we initialized earlier
         response = get_supabase().table("pings").insert(ping_payload).execute()
-        return {"status": "success", "message": "Ping recorded", "data": response.data}
+
+        return {
+            "status": "success",
+            "message": "Ping recorded",
+            "data": response.data,
+        }
 
     except Exception as e:
         print(f"Ping Error: {e}")
-        raise HTTPException(status_code=400, detail="Failed to record ping.")
+        raise HTTPException(status_code=400, detail=f"Failed to record ping: {str(e)}")
 
 
 @app.get("/pings")
-async def get_pings(trail_id: str = None):
+async def get_pings():
+    """Get all recent pings to display on the map."""
     try:
-        q = get_supabase().table("pings").select("*").order("date", desc=True)
-        if trail_id:
-            q = q.eq("trail_id", trail_id)
-        response = q.execute()
+        # Ordering by date so newest pings appear first
+        response = get_supabase().table("pings").select("*").order("date", desc=True).execute()
         return {"pings": response.data or []}
     except Exception as e:
         print(f"Get pings error: {e}")
@@ -183,24 +191,7 @@ async def get_trail_detail(trail_id: str):
 async def submit_trail(trail_data: dict):
     return await trail_service.submit_trail(trail_data)
 
-# ── Suggestions ───────────────────────────────────────────────────────────────
-
-@app.get("/suggestions/{trail_id}")
-async def get_suggestions(
-    trail_id:  str,
-    date:      str,
-    weight_kg: float = 70,
-    age:       int   = 30,
-    fitness:   str   = "Medium",
-):
-    try:
-        hiker = {"fitness_level": fitness.lower(), "age": age, "weight_kg": weight_kg}
-        return suggestions_service.get_suggestions_from_db(trail_id, date, hiker)
-    except Exception as e:
-        print(f"Suggestions error: {e}")
-        raise HTTPException(status_code=500, detail=f"Could not generate suggestions: {str(e)}")
-
-# ── Packing list (legacy) ─────────────────────────────────────────────────────
+# ── Packing list ──────────────────────────────────────────────────────────────
 
 @app.get("/packing-list")
 def get_packing_list(duration: float, weather: str, terrain: str):
