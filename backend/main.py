@@ -125,7 +125,7 @@ async def create_ping(data: PingJSON):
             "lng": data.lng,                    # float8
             "description": data.description,    # text
             "time": now.strftime("%H:%M:%S"),   # timetz
-            "date": now.isoformat,            # timestamptz
+            "date": now.isoformat(),            # timestamptz
         }
 
         # Use your global 'supabase' client we initialized earlier
