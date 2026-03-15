@@ -17,6 +17,7 @@ export default function LoginScreen({ navigation }) {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
 
+    // send credentials to backend and navigates to home if login succeeds
     const handleLogin = async () => {
         try {
             const NGROK_URL = 'https://summarisable-subarticulative-queenie.ngrok-free.dev';
@@ -90,6 +91,7 @@ export default function LoginScreen({ navigation }) {
                             />
                         </View>
 
+                        {/* Password */}
                         <View style={styles.fieldContainer}>
                             <Text style={styles.label}>Password</Text>
                             <View style={styles.passwordWrapper}>
@@ -102,6 +104,8 @@ export default function LoginScreen({ navigation }) {
                                     secureTextEntry={!showPassword}
                                     autoCapitalize="none"
                                 />
+
+                                {/* Toggle password visibility */}
                                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
                                     <MaterialIcons
                                         name={showPassword ? 'visibility-off' : 'visibility'}
@@ -112,18 +116,18 @@ export default function LoginScreen({ navigation }) {
                             </View>
                         </View>
 
+                        {/*Main submit button*/}
                         <TouchableOpacity style={styles.button} onPress={handleLogin} activeOpacity={0.9}>
                             <Text style={styles.buttonText}>LOG IN</Text>
                         </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.forgotBtn}>
-                            <Text style={styles.forgotText}>Forgot your password?</Text>
-                        </TouchableOpacity>
                     </View>
+
+                    {/*Skip button to go straight to home without logging in*/}
                     <TouchableOpacity onPress={() => navigation?.navigate('Home')}>
                         <Text style={styles.skipText}>Skip for now</Text>
                     </TouchableOpacity>
-                    {/* Footer */}
+
+                    {/* Footer with link to sign up */}
                     <View style={styles.footer}>
                         <Text style={styles.footerText}>New here? </Text>
                         <TouchableOpacity onPress={() => navigation?.navigate('SignUp')}>
@@ -131,7 +135,7 @@ export default function LoginScreen({ navigation }) {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Bottom mountains */}
+                    {/* Bottom mountains design */}
                     <View style={styles.mountains}>
                         <View style={[styles.mountain, { left: 0, width: 180, height: 90 }]} />
                         <View style={[styles.mountain, { left: 130, width: 220, height: 120 }]} />

@@ -14,9 +14,13 @@ import MapView, { Polyline, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
+
+// AsyncStorage key used to persist pings that couldn't be sent while offline
 const QUEUE_KEY = 'pending_pings';
 const API_URL = 'https://summarisable-subarticulative-queenie.ngrok-free.dev/pings';
 
+// Converts a GeoJSON route (LineString or MultiLineString) into arrays of { latitude, longitude } that react-native-maps Polyline can render directly.
+// GeoJSON stores coordinates as [lng, lat], so we swap them here.
 const geojsonToSegments = (routePath) => {
     if (!routePath) return [];
     try {
@@ -37,6 +41,7 @@ const geojsonToSegments = (routePath) => {
     return [];
 };
 
+// Calculates a map region that fits all route coordinates with some padding (1.4x)
 const getRegion = (segments) => {
     const coords = segments.flat();
     if (!coords.length) return null;
@@ -55,6 +60,9 @@ const getRegion = (segments) => {
         longitudeDelta: (maxLng - minLng) * 1.4 || 0.05,
     };
 };
+
+
+// Converts raw minutes into a readable "Xh Ym" string
 const formatDuration = (minutes) => {
     if (!minutes) return '--';
     const num = parseInt(minutes);
@@ -65,6 +73,7 @@ const formatDuration = (minutes) => {
 };
 
 export default function Mapscreen({ route, navigation }) {
+    // Converts raw minutes into a readable "Xh Ym" string
     const trail = route?.params?.trail || {};
 
     const [routeSegments, setRouteSegments] = useState([]);
@@ -77,6 +86,7 @@ export default function Mapscreen({ route, navigation }) {
     const [customDetail, setCustomDetail] = useState('');
     const [currentPings, setCurrentPings] = useState(route?.params?.pings || []);
 
+    // Offline mode simulation, when true, pings go to the local queue instead of the server
     const [simulateOffline, setSimulateOffline] = useState(false);
     const [queueCount, setQueueCount] = useState(0);
     const [syncStatus, setSyncStatus] = useState('online');
@@ -88,6 +98,7 @@ export default function Mapscreen({ route, navigation }) {
             setRouteSegments(segments);
             setRegion(getRegion(segments));
         } else {
+            // Default region (central Romania) if no route data is available
             setRegion({ latitude: 45.45, longitude: 25.50, latitudeDelta: 0.1, longitudeDelta: 0.1 });
         }
         setLoading(false);
@@ -99,6 +110,8 @@ export default function Mapscreen({ route, navigation }) {
         setQueueCount(raw ? JSON.parse(raw).length : 0);
     };
 
+    // Toggles between simulated offline and online mode
+    // Coming back online triggers a flush of any queued pings
     const toggleOfflineMode = async () => {
         const goingOffline = !simulateOffline;
         setSimulateOffline(goingOffline);
@@ -119,6 +132,9 @@ export default function Mapscreen({ route, navigation }) {
         setQueueCount(queue.length);
     };
 
+    // Attempts to send all queued pings to the server.
+    // Any that fail are kept in the queue for the next retry.
+    // isSyncing.current prevents overlapping flush calls.
     const flushQueue = async () => {
         if (isSyncing.current) return;
         const raw = await AsyncStorage.getItem(QUEUE_KEY);
@@ -154,6 +170,7 @@ export default function Mapscreen({ route, navigation }) {
             }
         }
 
+        // Overwrite the queue with only the pings that still failed
         await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(failed));
         setQueueCount(failed.length);
 
@@ -170,7 +187,7 @@ export default function Mapscreen({ route, navigation }) {
         setTempPing(e.nativeEvent.coordinate);
         setIsAddingPing(true);
     };
-
+    // Builds the ping payload and either sends it to the server or queues it if offline
     const submitNewPing = async () => {
         const payload = {
             "type": dangerType === 'Custom' ? 'Danger' : dangerType,
@@ -222,12 +239,12 @@ export default function Mapscreen({ route, navigation }) {
             setSyncStatus('offline');
         }
     };
-
+    // Start and end markers are the first and last coordinates of the full route
     const startPoint = routeSegments[0]?.[0];
     const endPoint = routeSegments.length > 0
         ? routeSegments[routeSegments.length - 1][routeSegments[routeSegments.length - 1].length - 1]
         : null;
-
+    // Returns the colored banner shown below the trail pill when offline or syncing
     const renderSyncBanner = () => {
         if (!simulateOffline && queueCount === 0) return null;
         let bgColor = '#4b5563', text = `Offline Mode · ${queueCount} queued`;

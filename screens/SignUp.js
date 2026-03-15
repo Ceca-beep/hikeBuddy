@@ -17,19 +17,27 @@ const { width } = Dimensions.get('window');
 const SEX_OPTIONS = ['Male', 'Female'];
 
 export default function SignUpScreen({ navigation }) {
+    // account info fields from step 1
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+
+    // steps for signing up
     const [step, setStep] = useState(0);
+
+    // animated value for the slide transition between steps
     const slideAnim = useRef(new Animated.Value(0)).current;
+
+    // account info fields from step 2
     const [age, setAge] = useState('');
     const [weight, setWeight] = useState('');
     const [height, setHeight] = useState('');
     const [sex, setSex] = useState('');
 
+    // slides the current step out and the next one in from the correct side
     const slideTo = (nextStep) => {
         const direction = nextStep > step ? -width : width;
         Animated.timing(slideAnim, {
@@ -47,6 +55,7 @@ export default function SignUpScreen({ navigation }) {
         });
     };
 
+    // Validates step 1 before allowing the user to proceed
     const handleNext = () => {
         if (!firstName || !email || !password) {
             alert('Please fill in all required fields.');
@@ -59,6 +68,7 @@ export default function SignUpScreen({ navigation }) {
         slideTo(1);
     };
 
+    // Submits the full registration payload to the backend
     const handleSignUp = async () => {
         if (password !== confirmPassword) {
             alert('Passwords do not match');
@@ -100,18 +110,22 @@ export default function SignUpScreen({ navigation }) {
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
                 <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
 
+                    {/* Hero section with logo, app name, tagline, and mountains */}
                     <View style={styles.hero}>
                         <View style={styles.logoCircle}>
                             <MaterialIcons name="terrain" size={48} color="white" />
                         </View>
                         <Text style={styles.appName}>HikeBuddy</Text>
                         <Text style={styles.appTagline}>Your pocket travel guide</Text>
+
                         <View style={styles.mountainRow}>
                             <View style={[styles.mountain, { left: 0, width: 200, height: 80 }]} />
                             <View style={[styles.mountain, { left: 150, width: 250, height: 110 }]} />
                             <View style={[styles.mountain, { right: 0, width: 200, height: 80 }]} />
                         </View>
                     </View>
+
+                    {/* Progress bar: shows "Step 1 of 2" / "Step 2 of 2" and fills accordingly */}
 
                     <View style={styles.progressContainer}>
                         <View style={styles.progressRow}>
@@ -123,6 +137,7 @@ export default function SignUpScreen({ navigation }) {
                         </View>
                     </View>
 
+                    {/* Animated wrapper — translateX drives the slide transition between steps */}
                     <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
                         {step === 0 && (
                             <View style={styles.form}>
@@ -141,6 +156,7 @@ export default function SignUpScreen({ navigation }) {
                                     <Text style={styles.label}>Email</Text>
                                     <TextInput style={styles.input} placeholder="Enter your email" placeholderTextColor="rgba(255,255,255,0.5)" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
                                 </View>
+                                {/* Password with visibility toggle */}
                                 <View style={styles.fieldContainer}>
                                     <Text style={styles.label}>Password</Text>
                                     <View style={styles.passwordWrapper}>
@@ -154,6 +170,7 @@ export default function SignUpScreen({ navigation }) {
                                     <Text style={styles.label}>Confirm Password</Text>
                                     <TextInput style={styles.input} placeholder="Repeat your password" placeholderTextColor="rgba(255,255,255,0.5)" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry autoCapitalize="none" />
                                 </View>
+                                {/* Validates and slides to step 2 */}
                                 <TouchableOpacity style={styles.button} onPress={handleNext} activeOpacity={0.9}>
                                     <Text style={styles.buttonText}>Next →</Text>
                                 </TouchableOpacity>
@@ -225,6 +242,7 @@ export default function SignUpScreen({ navigation }) {
                                         ))}
                                     </View>
                                 </View>
+                                {/* Back slides to step 0; Create Account submits the form */}
                                 <View style={styles.buttonRow}>
                                     <TouchableOpacity style={styles.backBtn} onPress={() => slideTo(0)} activeOpacity={0.8}>
                                         <Text style={styles.backBtnText}>← Back</Text>
