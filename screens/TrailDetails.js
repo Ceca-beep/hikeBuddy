@@ -54,20 +54,22 @@ export default function TrailDetails({ route, navigation }) {
     const [loading,     setLoading]     = useState(false);
     const [sugLoading,  setSugLoading]  = useState(false);
 
+    // ── Single effect on mount — fetch trail then suggestions ─────────────────
     useEffect(() => {
         const id = trailParam.osm_id || trailParam.id;
         if (!id) return;
 
         (async () => {
+            // 1. Fetch full trail detail
             setLoading(true);
-            let fullTrailId = trailParam.id;
+            let fullTrailId = trailParam.id; // fallback to param id
             try {
                 const resp = await fetch(`${API_BASE}/trails/${id}`, { headers: API_HEADERS });
                 const data = await resp.json();
                 if (resp.ok) {
                     setTrail(data);
                     setPings(data.pings || []);
-                    fullTrailId = data.id;
+                    fullTrailId = data.id; // use the UUID from the response
                 }
             } catch (e) {
                 console.warn('Could not fetch trail detail:', e);
@@ -75,6 +77,7 @@ export default function TrailDetails({ route, navigation }) {
                 setLoading(false);
             }
 
+            // 2. Fetch suggestions right after — using the UUID we just got
             if (selectedDate && fullTrailId) {
                 setSugLoading(true);
                 try {
@@ -97,7 +100,7 @@ export default function TrailDetails({ route, navigation }) {
                 }
             }
         })();
-    }, []);
+    }, []); // runs once on mount
 
     const gear      = suggestions?.gear || null;
     const localPrep = calcLocalPrep(trail);
@@ -137,13 +140,7 @@ export default function TrailDetails({ route, navigation }) {
                         {/* Stats */}
                         <View style={styles.statsRow}>
                             <View style={styles.statCard}>
-                                <Text style={styles.statValue}>
-                                    {(() => {
-                                        const d = parseFloat(trail.distance_km);
-                                        if (isNaN(d)) return "0";
-                                        return d > 1000 ? (d / 1000).toFixed(1) : d.toFixed(1);
-                                    })()} km
-                                </Text>
+                                <Text style={styles.statValue}>{trail.distance_km} km</Text>
                                 <Text style={styles.statLabel}>Distance</Text>
                             </View>
                             <View style={styles.statCard}>

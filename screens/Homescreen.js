@@ -191,6 +191,7 @@ export default function HomeScreen({ navigation }) {
         (selectedFitness !== 'Medium' ? 1 : 0);
 
     const openTrail = (trail) => {
+        console.log('Opening trail with date:', startDate);
         navigation?.navigate('TrailDetail', {
             trail,
             date:    startDate || null,
@@ -289,12 +290,12 @@ export default function HomeScreen({ navigation }) {
                             )}
                             {startDate && (
                                 <TouchableOpacity style={styles.activeChip} onPress={() => { setStartDate(''); setEndDate(''); }}>
-                                    <Text style={styles.activeChipText}>📅 {formatDate(startDate)} ✕</Text>
+                                    <Text style={styles.activeChipText}> {formatDate(startDate)} ✕</Text>
                                 </TouchableOpacity>
                             )}
                             {selectedFitness !== 'Medium' && (
                                 <TouchableOpacity style={styles.activeChip} onPress={() => setSelectedFitness('Medium')}>
-                                    <Text style={styles.activeChipText}>🏃 {selectedFitness} ✕</Text>
+                                    <Text style={styles.activeChipText}> {selectedFitness} ✕</Text>
                                 </TouchableOpacity>
                             )}
                         </ScrollView>
