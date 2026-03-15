@@ -26,9 +26,21 @@ def _hours_ago(danger: dict) -> float:
     return (datetime.now(timezone.utc) - ts).total_seconds() / 3600
 
 
+def _to_float(val, default=0):
+    """Safely convert a value to float — handles lists, None, strings."""
+    if val is None:
+        return float(default)
+    if isinstance(val, list):
+        val = val[0] if val else default
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return float(default)
+
+
 def get_recommended_seasons(trail: dict) -> dict:
-    max_elev = trail.get("max_elevation") or 0   # ← correct DB column name
-    gain     = trail.get("ascent") or 0
+    max_elev = _to_float(trail.get("max_elevation"))
+    gain     = _to_float(trail.get("ascent"))
     if max_elev > 2200 or gain > 1200:
         return {"recommended_seasons": ["summer", "autumn"],
                 "season_warning": "⚠️ Only recommended in summer and early autumn — dangerous in winter and spring"}
@@ -43,9 +55,9 @@ def suggest_gear(trail: dict, weather: dict, dangers: list) -> dict:
     recommended = []
     optional    = []
 
-    duration_hours = (trail.get("duration") or 0) / 60
-    gain     = trail.get("ascent")        or 0
-    max_elev = trail.get("max_elevation") or 0   # ← correct DB column name
+    duration_hours = _to_float(trail.get("duration")) / 60
+    gain     = _to_float(trail.get("ascent"))
+    max_elev = _to_float(trail.get("max_elevation"))
 
     if duration_hours > 4:
         essential.append("headlamp + spare batteries")
@@ -104,17 +116,17 @@ def generate_warnings(trail: dict, weather: dict, dangers: list, seasons: dict) 
         hours    = _hours_ago(d)
         time_str = f"{hours:.0f} hours ago" if hours >= 1 else f"{hours * 60:.0f} minutes ago"
         warnings.append(f"🐻 {d.get('type','Danger').capitalize()} reported {time_str} near this trail")
-    if (trail.get("distance_km") or 0) > 5:
+    if _to_float(trail.get("distance_km")) > 5:
         warnings.append("💧 Carry at least 1.5L of water from the start")
     return warnings
 
 
 def get_suggestions(trail: dict, date: str, dangers: list, hiker: dict) -> dict:
-    weather  = get_full_weather_context(
+    weather = get_full_weather_context(
         route_path=trail.get("route_path"),
         date=date,
-        duration_minutes=trail.get("duration") or 240,
-        max_elevation_m=trail.get("max_elevation") or 0,   # ← correct DB column name
+        duration_minutes=_to_float(trail.get("duration"), default=240),
+        max_elevation_m=_to_float(trail.get("max_elevation"), default=0),
     )
     seasons  = get_recommended_seasons(trail)
     gear     = suggest_gear(trail, weather, dangers)
