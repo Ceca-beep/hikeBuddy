@@ -74,7 +74,6 @@ export default function HomeScreen({ navigation }) {
     const [search,        setSearch]        = useState('');
     const [filterVisible, setFilterVisible] = useState(false);
 
-    // Applied filters
     const [selectedDifficulty, setSelectedDifficulty] = useState([]);
     const [selectedFitness,    setSelectedFitness]    = useState('Medium');
     const [selectedDuration,   setSelectedDuration]   = useState([]);
@@ -82,7 +81,6 @@ export default function HomeScreen({ navigation }) {
     const [startDate,          setStartDate]          = useState('');
     const [endDate,            setEndDate]            = useState('');
 
-    // Pending (inside modal)
     const [pendingDifficulty, setPendingDifficulty] = useState([]);
     const [pendingFitness,    setPendingFitness]    = useState('Medium');
     const [pendingDuration,   setPendingDuration]   = useState([]);
@@ -90,7 +88,6 @@ export default function HomeScreen({ navigation }) {
     const [pendingStart,      setPendingStart]      = useState('');
     const [pendingEnd,        setPendingEnd]        = useState('');
 
-    // ── Fetch trails ──────────────────────────────────────────────────────────
     const fetchTrails = async (params = {}) => {
         setLoading(true);
         setError(null);
@@ -118,7 +115,6 @@ export default function HomeScreen({ navigation }) {
 
     useEffect(() => { fetchTrails(); }, []);
 
-    // Debounced re-fetch when filters change
     useEffect(() => {
         const distObj = DISTANCE_OPTIONS.find(d => d.label === selectedDistance);
         const timer = setTimeout(() => {
@@ -133,7 +129,6 @@ export default function HomeScreen({ navigation }) {
         return () => clearTimeout(timer);
     }, [search, selectedDifficulty, selectedDuration, selectedDistance]);
 
-    // ── Filter modal ──────────────────────────────────────────────────────────
     const openFilters = () => {
         setPendingDifficulty([...selectedDifficulty]);
         setPendingFitness(selectedFitness);
@@ -155,14 +150,13 @@ export default function HomeScreen({ navigation }) {
     };
 
     const clearFilters = () => {
-        // pending
         setPendingDifficulty([]);
         setPendingFitness('Medium');
         setPendingDuration([]);
         setPendingDistance('Any');
         setPendingStart('');
         setPendingEnd('');
-        // aplicate
+
         setSelectedDifficulty([]);
         setSelectedFitness('Medium');
         setSelectedDuration([]);
@@ -204,7 +198,6 @@ export default function HomeScreen({ navigation }) {
         });
     };
 
-    // ── Chip group component ──────────────────────────────────────────────────
     const ChipGroup = ({ label, options, selected, onToggle, single = false, isObjects = false }) => (
         <View style={styles.chipSection}>
             <Text style={styles.chipSectionLabel}>{label}</Text>
@@ -357,8 +350,6 @@ export default function HomeScreen({ navigation }) {
                                                         {(() => {
                                                             const d = parseFloat(item.distance_km);
                                                             if (isNaN(d)) return "0";
-                                                            // Dacă e peste 1000, e clar că sunt metri (ex: 5700m -> 5.7km)
-                                                            // Dacă e sub 1000, e deja în km (ex: 5.7 -> 5.7km)
                                                             return d > 1000 ? (d / 1000).toFixed(1) : d.toFixed(1);
                                                         })()} km
                                                     </Text>

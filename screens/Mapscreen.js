@@ -17,7 +17,6 @@ const { width, height } = Dimensions.get('window');
 const QUEUE_KEY = 'pending_pings';
 const API_URL = 'https://summarisable-subarticulative-queenie.ngrok-free.dev/pings';
 
-// ─── GeoJSON Processing ──────────────────────────────────────────────────────
 const geojsonToSegments = (routePath) => {
     if (!routePath) return [];
     try {
@@ -61,8 +60,6 @@ const formatDuration = (minutes) => {
     const num = parseInt(minutes);
     const h = Math.floor(num / 60);
     const m = num % 60;
-    // Dacă rezultatul ar fi de exemplu 103h (peste 6000 min), verificăm dacă nu cumva
-    // datele sunt deja în ore. Dacă h > 100, probabil sunt deja ore.
     if (h > 100) return `${num}h`;
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
@@ -70,7 +67,6 @@ const formatDuration = (minutes) => {
 export default function Mapscreen({ route, navigation }) {
     const trail = route?.params?.trail || {};
 
-    // States
     const [routeSegments, setRouteSegments] = useState([]);
     const [region, setRegion] = useState(null);
     const [selectedPing, setSelectedPing] = useState(null);
@@ -81,15 +77,12 @@ export default function Mapscreen({ route, navigation }) {
     const [customDetail, setCustomDetail] = useState('');
     const [currentPings, setCurrentPings] = useState(route?.params?.pings || []);
 
-    // Offline & Sync
     const [simulateOffline, setSimulateOffline] = useState(false);
     const [queueCount, setQueueCount] = useState(0);
     const [syncStatus, setSyncStatus] = useState('online');
     const isSyncing = useRef(false);
 
-    // ─── Initial Load ────────────────────────────────────────────────────────
     useEffect(() => {
-        AsyncStorage.removeItem('pending_pings');
         if (trail?.route_path) {
             const segments = geojsonToSegments(trail.route_path);
             setRouteSegments(segments);
@@ -118,7 +111,6 @@ export default function Mapscreen({ route, navigation }) {
         }
     };
 
-    // ─── Sync Logic ──────────────────────────────────────────────────────────
     const saveToQueue = async (payload) => {
         const raw = await AsyncStorage.getItem(QUEUE_KEY);
         const queue = raw ? JSON.parse(raw) : [];
@@ -133,7 +125,7 @@ export default function Mapscreen({ route, navigation }) {
         const queue = raw ? JSON.parse(raw) : [];
 
         if (queue.length === 0) {
-            setSyncStatus('online'); // Dacă nu e nimic în coadă, suntem online direct
+            setSyncStatus('online');
             return;
         }
 
@@ -152,7 +144,6 @@ export default function Mapscreen({ route, navigation }) {
                     body: JSON.stringify(payload),
                 });
 
-                // Dacă serverul dă 400 sau 500, e o problemă cu datele ping-ului, nu cu netul
                 if (!res.ok) {
                     console.log("Server rejected ping:", await res.text());
                     failed.push(payload);
@@ -170,13 +161,11 @@ export default function Mapscreen({ route, navigation }) {
             setSyncStatus('synced');
             setTimeout(() => setSyncStatus('online'), 3000);
         } else {
-            // Dacă au rămas pungi, înseamnă că netul e încă picat sau datele sunt proaste
             setSyncStatus('offline');
         }
         isSyncing.current = false;
     };
 
-    // ─── Map Interactions ────────────────────────────────────────────────────
     const handleMapPress = (e) => {
         setTempPing(e.nativeEvent.coordinate);
         setIsAddingPing(true);
@@ -198,7 +187,6 @@ export default function Mapscreen({ route, navigation }) {
 
         if (simulateOffline) {
             await saveToQueue(payload);
-            // Adăugăm local cu ID temporar ca să apară instant
             setCurrentPings(prev => [...prev, { ...payload, id: `temp-${Date.now()}` }]);
             return;
         }
@@ -216,11 +204,9 @@ export default function Mapscreen({ route, navigation }) {
             const result = await res.json();
 
             if (res.ok) {
-                // Dacă baza de date returnează obiectul creat (care are și ID-ul real din DB)
                 if (result.data && result.data[0]) {
                     setCurrentPings(prev => [...prev, result.data[0]]);
                 } else {
-                    // Dacă API-ul nu returnează obiectul, îl adăugăm pe cel trimis de noi + un ID generat
                     setCurrentPings(prev => [...prev, { ...payload, id: Date.now() }]);
                 }
                 alert('Danger reported!');
@@ -237,9 +223,10 @@ export default function Mapscreen({ route, navigation }) {
         }
     };
 
-    // ─── UI Helpers ──────────────────────────────────────────────────────────
     const startPoint = routeSegments[0]?.[0];
-    const endPoint = routeSegments[routeSegments.length - 1]?.at(-1);
+    const endPoint = routeSegments.length > 0
+        ? routeSegments[routeSegments.length - 1][routeSegments[routeSegments.length - 1].length - 1]
+        : null;
 
     const renderSyncBanner = () => {
         if (!simulateOffline && queueCount === 0) return null;
@@ -268,7 +255,12 @@ export default function Mapscreen({ route, navigation }) {
                 onLongPress={handleMapPress}
             >
                 {routeSegments.map((seg, i) => (
-                    <Polyline key={i} coordinates={seg} strokeColor="#f8c8c8" strokeWidth={4} />
+                    <Polyline
+                        key={`segment-${i}`}
+                        coordinates={seg}
+                        strokeColor="#f8c8c8"
+                        strokeWidth={4}
+                    />
                 ))}
 
                 {startPoint && <Marker coordinate={startPoint} title="Start" pinColor="green" />}
@@ -331,7 +323,6 @@ export default function Mapscreen({ route, navigation }) {
                         {(() => {
                             const d = parseFloat(trail.distance_km);
                             if (isNaN(d)) return "0";
-                            // Corecție: dacă d e 57142, îl face 57.1
                             return d > 1000 ? (d / 1000).toFixed(1) : d.toFixed(1);
                         })()} km · {formatDuration(trail.duration)}
                     </Text>
