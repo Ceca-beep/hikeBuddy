@@ -117,7 +117,7 @@ def extract_route_path(data: dict) -> Optional[dict]:
             geom = way.get("geometry")
             if not geom:
                 continue
-            converted = convert_geometry(geom)
+            converted = geom
             if converted["type"] == "LineString":
                 all_lines.append(converted["coordinates"])
 
