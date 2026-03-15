@@ -96,22 +96,24 @@ def compute_latest_start(duration_minutes: float, sunset_str: str) -> str:
 
 
 def extract_coords_from_route_path(route_path) -> tuple:
-    """
-    Extracts start (trailhead) and end (summit) coordinates from route_path.
-    Handles GeoJSON LineString format from Waymarked Trails:
-      {"type": "LineString", "coordinates": [[lng, lat], [lng, lat], ...]}
-    Also handles flat list format: [[lng, lat], ...]
-    Returns: (start_lat, start_lng), (end_lat, end_lng)
-    """
     import json
 
-    # parse string if needed
     if isinstance(route_path, str):
         route_path = json.loads(route_path)
 
-    # extract coordinates list
     if isinstance(route_path, dict):
-        coords = route_path.get("coordinates", [])
+        geo_type = route_path.get("type", "")
+        coords_raw = route_path.get("coordinates", [])
+
+        if geo_type == "LineString":
+            coords = coords_raw
+        elif geo_type == "MultiLineString":
+            # flatten all lines into one list of points
+            coords = []
+            for line in coords_raw:
+                coords.extend(line)
+        else:
+            coords = coords_raw
     elif isinstance(route_path, list):
         coords = route_path
     else:
@@ -120,10 +122,9 @@ def extract_coords_from_route_path(route_path) -> tuple:
     if not coords or len(coords) < 2:
         return None, None
 
-    # GeoJSON is [lng, lat] — swap to get (lat, lng)
     def to_lat_lng(point):
         if isinstance(point, (list, tuple)) and len(point) >= 2:
-            return float(point[1]), float(point[0])  # swap lng/lat
+            return float(point[1]), float(point[0])
         elif isinstance(point, dict):
             return float(point.get("lat", 0)), float(point.get("lng", 0))
         return None, None
@@ -132,7 +133,6 @@ def extract_coords_from_route_path(route_path) -> tuple:
     end_lat,   end_lng   = to_lat_lng(coords[-1])
 
     return (start_lat, start_lng), (end_lat, end_lng)
-
 
 def generate_weather_warnings(start_w: dict, summit_w: dict,
                                season: str, max_elevation_m: float) -> list:
