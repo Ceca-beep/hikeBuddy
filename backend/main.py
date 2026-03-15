@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from database import get_supabase
-from datetime import datetime
+from datetime import datetime,timedelta, timezone
 import trails as trail_service
 import packing as packing_service
 import suggestions as suggestions_service
