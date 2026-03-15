@@ -51,7 +51,7 @@ uvicorn main:app --reload --port 8000
 
 ## Future Additions
 
-- **Reputation system** — To prevent fake danger alerts, we will implement a trusted user feature where a user's reporting history is monitored over time. Users who consistently report accurate alerts will gain a trusted status, making their pings more visible to other hikers.
-- **Feedback section** — After completing a hike, users will be able to rate the trail and leave suggestions or opinions to help other hikers make better decisions.
-- **Offline maps** — Users will be able to download the trail map before their hike so the app can be used in areas with no internet connection.
-- **Hike history** — Users will be able to log all their completed hikes and view personal stats such as total distance, elevation gained, and calories burned.
+- **Reputation system**: To prevent fake danger alerts, we will implement a trusted user feature where a user's reporting history is monitored over time. Users who consistently report accurate alerts will gain a trusted status, making their pings more visible to other hikers.
+- **Feedback section**: After completing a hike, users will be able to rate the trail and leave suggestions or opinions to help other hikers make better decisions.
+- **Offline maps**: Users will be able to download the trail map before their hike so the app can be used in areas with no internet connection.
+- **Hike history**: Users will be able to log all their completed hikes and view personal stats such as total distance, elevation gained, and calories burned.
