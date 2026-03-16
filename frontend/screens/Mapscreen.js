@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -7,40 +7,43 @@ import {
     SafeAreaView,
     Dimensions,
     ActivityIndicator,
+    Modal,
+    TextInput,
 } from 'react-native';
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
-// ─── Convert GeoJSON route_path → react-native-maps coordinates ──────────────
-// GeoJSON stores [longitude, latitude], react-native-maps needs {latitude, longitude}
-const geojsonToCoords = (routePath) => {
-    if (!routePath) return [];
+// AsyncStorage key used to persist pings that couldn't be sent while offline
+const QUEUE_KEY = 'pending_pings';
+const API_URL = 'https://summarisable-subarticulative-queenie.ngrok-free.dev/pings';
 
+// Converts a GeoJSON route (LineString or MultiLineString) into arrays of { latitude, longitude } that react-native-maps Polyline can render directly.
+// GeoJSON stores coordinates as [lng, lat], so we swap them here.
+const geojsonToSegments = (routePath) => {
+    if (!routePath) return [];
     try {
         const geojson = typeof routePath === 'string' ? JSON.parse(routePath) : routePath;
 
         if (geojson.type === 'LineString') {
-            return geojson.coordinates.map(([lng, lat]) => ({
-                latitude: lat,
-                longitude: lng,
-            }));
+            return [geojson.coordinates.map(([lng, lat]) => ({ latitude: lat, longitude: lng }))];
         }
 
         if (geojson.type === 'MultiLineString') {
-            return geojson.coordinates.flatMap(line =>
+            return geojson.coordinates.map(line =>
                 line.map(([lng, lat]) => ({ latitude: lat, longitude: lng }))
             );
         }
     } catch (e) {
         console.error('Failed to parse route_path:', e);
     }
-
     return [];
 };
 
-// ─── Calculate map region to fit all coords ───────────────────────────────────
-const getRegion = (coords) => {
+// Calculates a map region that fits all route coordinates with some padding (1.4x)
+const getRegion = (segments) => {
+    const coords = segments.flat();
     if (!coords.length) return null;
 
     const lats = coords.map(c => c.latitude);
@@ -58,41 +61,205 @@ const getRegion = (coords) => {
     };
 };
 
-export default function Mapscreen({ route, navigation }) {
-    const trail = route?.params?.trail || {};
-    const pings = route?.params?.pings || [];
 
-    const [routeCoords, setRouteCoords] = useState([]);
+// Converts raw minutes into a readable "Xh Ym" string
+const formatDuration = (minutes) => {
+    if (!minutes) return '--';
+    const num = parseInt(minutes);
+    const h = Math.floor(num / 60);
+    const m = num % 60;
+    if (h > 100) return `${num}h`;
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+};
+
+export default function Mapscreen({ route, navigation }) {
+    // Converts raw minutes into a readable "Xh Ym" string
+    const trail = route?.params?.trail || {};
+
+    const [routeSegments, setRouteSegments] = useState([]);
     const [region, setRegion] = useState(null);
     const [selectedPing, setSelectedPing] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [tempPing, setTempPing] = useState(null);
+    const [isAddingPing, setIsAddingPing] = useState(false);
+    const [dangerType, setDangerType] = useState('');
+    const [customDetail, setCustomDetail] = useState('');
+    const [currentPings, setCurrentPings] = useState(route?.params?.pings || []);
+
+    // Offline mode simulation, when true, pings go to the local queue instead of the server
+    const [simulateOffline, setSimulateOffline] = useState(false);
+    const [queueCount, setQueueCount] = useState(0);
+    const [syncStatus, setSyncStatus] = useState('online');
+    const isSyncing = useRef(false);
 
     useEffect(() => {
         if (trail?.route_path) {
-            const coords = geojsonToCoords(trail.route_path);
-            setRouteCoords(coords);
-            setRegion(getRegion(coords));
+            const segments = geojsonToSegments(trail.route_path);
+            setRouteSegments(segments);
+            setRegion(getRegion(segments));
         } else {
-            setRegion({
-                latitude: 45.45,
-                longitude: 25.50,
-                latitudeDelta: 0.1,
-                longitudeDelta: 0.1
-            });
+            // Default region (central Romania) if no route data is available
+            setRegion({ latitude: 45.45, longitude: 25.50, latitudeDelta: 0.1, longitudeDelta: 0.1 });
         }
         setLoading(false);
+        loadQueueCount();
     }, [trail.route_path]);
 
-    const startPoint = routeCoords[0];
-    const endPoint = routeCoords[routeCoords.length - 1];
+    const loadQueueCount = async () => {
+        const raw = await AsyncStorage.getItem(QUEUE_KEY);
+        setQueueCount(raw ? JSON.parse(raw).length : 0);
+    };
 
-    if (loading || !region) {
+    // Toggles between simulated offline and online mode
+    // Coming back online triggers a flush of any queued pings
+    const toggleOfflineMode = async () => {
+        const goingOffline = !simulateOffline;
+        setSimulateOffline(goingOffline);
+
+        if (!goingOffline) {
+            setSyncStatus('syncing');
+            await flushQueue();
+        } else {
+            setSyncStatus('offline');
+        }
+    };
+
+    const saveToQueue = async (payload) => {
+        const raw = await AsyncStorage.getItem(QUEUE_KEY);
+        const queue = raw ? JSON.parse(raw) : [];
+        queue.push(payload);
+        await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+        setQueueCount(queue.length);
+    };
+
+    // Attempts to send all queued pings to the server.
+    // Any that fail are kept in the queue for the next retry.
+    // isSyncing.current prevents overlapping flush calls.
+    const flushQueue = async () => {
+        if (isSyncing.current) return;
+        const raw = await AsyncStorage.getItem(QUEUE_KEY);
+        const queue = raw ? JSON.parse(raw) : [];
+
+        if (queue.length === 0) {
+            setSyncStatus('online');
+            return;
+        }
+
+        isSyncing.current = true;
+        setSyncStatus('syncing');
+
+        const failed = [];
+        for (const payload of queue) {
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!res.ok) {
+                    console.log("Server rejected ping:", await res.text());
+                    failed.push(payload);
+                }
+            } catch (err) {
+                console.log("Network error during sync:", err);
+                failed.push(payload);
+            }
+        }
+
+        // Overwrite the queue with only the pings that still failed
+        await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(failed));
+        setQueueCount(failed.length);
+
+        if (failed.length === 0) {
+            setSyncStatus('synced');
+            setTimeout(() => setSyncStatus('online'), 3000);
+        } else {
+            setSyncStatus('offline');
+        }
+        isSyncing.current = false;
+    };
+
+    const handleMapPress = (e) => {
+        setTempPing(e.nativeEvent.coordinate);
+        setIsAddingPing(true);
+    };
+    // Builds the ping payload and either sends it to the server or queues it if offline
+    const submitNewPing = async () => {
+        const payload = {
+            "type": dangerType === 'Custom' ? 'Danger' : dangerType,
+            "lat": tempPing.latitude,
+            "lng": tempPing.longitude,
+            "description": customDetail,
+            "trail_id": trail.id
+        };
+
+        setIsAddingPing(false);
+        setTempPing(null);
+        setDangerType('');
+        setCustomDetail('');
+
+        if (simulateOffline) {
+            await saveToQueue(payload);
+            setCurrentPings(prev => [...prev, { ...payload, id: `temp-${Date.now()}` }]);
+            return;
+        }
+
+        try {
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                },
+                body: JSON.stringify(payload),
+            });
+
+            const result = await res.json();
+
+            if (res.ok) {
+                if (result.data && result.data[0]) {
+                    setCurrentPings(prev => [...prev, result.data[0]]);
+                } else {
+                    setCurrentPings(prev => [...prev, { ...payload, id: Date.now() }]);
+                }
+                alert('Danger reported!');
+            } else {
+                await saveToQueue(payload);
+                setCurrentPings(prev => [...prev, { ...payload, id: `temp-${Date.now()}` }]);
+                setSyncStatus('offline');
+            }
+        } catch (e) {
+            console.error("Submit error:", e);
+            await saveToQueue(payload);
+            setCurrentPings(prev => [...prev, { ...payload, id: `temp-${Date.now()}` }]);
+            setSyncStatus('offline');
+        }
+    };
+    // Start and end markers are the first and last coordinates of the full route
+    const startPoint = routeSegments[0]?.[0];
+    const endPoint = routeSegments.length > 0
+        ? routeSegments[routeSegments.length - 1][routeSegments[routeSegments.length - 1].length - 1]
+        : null;
+    // Returns the colored banner shown below the trail pill when offline or syncing
+    const renderSyncBanner = () => {
+        if (!simulateOffline && queueCount === 0) return null;
+        let bgColor = '#4b5563', text = `Offline Mode · ${queueCount} queued`;
+        if (syncStatus === 'syncing') { bgColor = '#b45309'; text = `Syncing ${queueCount} pings...`; }
+        else if (syncStatus === 'synced') { bgColor = '#15803d'; text = '✓ All pings synced!'; }
+        else if (queueCount > 0 && !simulateOffline) { bgColor = '#991b1b'; text = `Connection issue · ${queueCount} pings waiting`; }
         return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#f8c8c8" />
-                <Text style={styles.loadingText}>Loading trail map...</Text>
+            <View style={[styles.syncBanner, { backgroundColor: bgColor }]}>
+                <Text style={styles.syncBannerText}>{text}</Text>
             </View>
         );
+    };
+
+    if (loading || !region) {
+        return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#f8c8c8" /></View>;
     }
 
     return (
@@ -102,101 +269,119 @@ export default function Mapscreen({ route, navigation }) {
                 provider={PROVIDER_DEFAULT}
                 initialRegion={region}
                 showsUserLocation
-                showsCompass
+                onLongPress={handleMapPress}
             >
-                {/* Trail route line */}
-                {routeCoords.length > 0 && (
+                {routeSegments.map((seg, i) => (
                     <Polyline
-                        coordinates={routeCoords}
+                        key={`segment-${i}`}
+                        coordinates={seg}
                         strokeColor="#f8c8c8"
                         strokeWidth={4}
                     />
-                )}
+                ))}
 
-                {/* Start marker */}
-                {startPoint && (
-                    <Marker
-                        coordinate={startPoint}
-                        title="Start"
-                        pinColor="green"
-                    />
-                )}
+                {startPoint && <Marker coordinate={startPoint} title="Start" pinColor="green" />}
+                {endPoint && <Marker coordinate={endPoint} title="Finish" pinColor="#4a7c59" />}
 
-                {/* End marker */}
-                {endPoint && endPoint !== startPoint && (
+                {currentPings.map((ping) => (
                     <Marker
-                        coordinate={endPoint}
-                        title="Finish"
-                        pinColor="#4a7c59"
-                    />
-                )}
-
-                {/* Danger pings — lat/lng come directly from pings table */}
-                {pings.map((ping) => (
-                    <Marker
-                        key={ping.id}
-                        coordinate={{ latitude: ping.lat, longitude: ping.lng }}
+                        key={ping.id ? String(ping.id) : `ping-${ping.lat}-${ping.lng}`}
+                        coordinate={{ latitude: Number(ping.lat), longitude: Number(ping.lng) }}
                         title={ping.type}
                         description={ping.description}
                         pinColor="red"
                         onPress={() => setSelectedPing(ping)}
                     />
                 ))}
+                {tempPing && <Marker coordinate={tempPing} pinColor="yellow" />}
             </MapView>
 
-            {/* Back button + trail name */}
+            <Modal visible={isAddingPing} transparent animationType="fade">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Report Danger</Text>
+                        <View style={styles.chipRow}>
+                            {['Bear', 'Viper', 'Wolf', 'Custom'].map(t => (
+                                <TouchableOpacity key={t} style={[styles.chip, dangerType === t && styles.chipActive]} onPress={() => setDangerType(t)}>
+                                    <Text style={[styles.chipText, dangerType === t && styles.chipTextActive]}>{t}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        <TextInput
+                            style={[styles.textInput, { height: 80, textAlignVertical: 'top' }]}
+                            placeholder="Ex: Bridge is broken..."
+                            placeholderTextColor="rgba(255,255,255,0.4)"
+                            value={customDetail}
+                            onChangeText={setCustomDetail}
+                            multiline
+                        />
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setIsAddingPing(false); setTempPing(null); }}>
+                                <Text style={styles.cancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.confirmBtn} onPress={submitNewPing}>
+                                <Text style={styles.confirmText}>Submit</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
             <SafeAreaView style={styles.topOverlay}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => navigation?.goBack()}>
-                    <Text style={styles.backText}>← Back</Text>
-                </TouchableOpacity>
+                <View style={styles.topRow}>
+                    <TouchableOpacity style={styles.backBtn} onPress={() => navigation?.goBack()}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
+                    <TouchableOpacity style={[styles.offlineBtn, simulateOffline && styles.offlineBtnActive]} onPress={toggleOfflineMode}>
+                        <Text style={styles.offlineBtnText}>{simulateOffline ? 'Offline' : 'Online'}</Text>
+                    </TouchableOpacity>
+                </View>
                 <View style={styles.trailPill}>
                     <Text style={styles.trailPillName}>{trail.name}</Text>
                     <Text style={styles.trailPillSub}>
-                        {trail.distance_km} km · {trail.duration}h
+                        {(() => {
+                            const d = parseFloat(trail.distance_km);
+                            if (isNaN(d)) return "0";
+                            return d > 1000 ? (d / 1000).toFixed(1) : d.toFixed(1);
+                        })()} km · {formatDuration(trail.duration)}
                     </Text>
                 </View>
+                {renderSyncBanner()}
             </SafeAreaView>
 
-            {/* Ping popup when marker is tapped */}
             {selectedPing && (
                 <View style={styles.pingPopup}>
                     <View style={styles.pingPopupHeader}>
-                        <View style={styles.pingTypeBadge}>
-                            <Text style={styles.pingTypeText}>{selectedPing.type}</Text>
-                        </View>
-                        <TouchableOpacity onPress={() => setSelectedPing(null)}>
-                            <Text style={styles.pingClose}>✕</Text>
-                        </TouchableOpacity>
+                        <View style={styles.pingTypeBadge}><Text style={styles.pingTypeText}>{selectedPing.type}</Text></View>
+                        <TouchableOpacity onPress={() => setSelectedPing(null)}><Text style={styles.pingClose}>✕</Text></TouchableOpacity>
                     </View>
                     <Text style={styles.pingDesc}>{selectedPing.description}</Text>
-                    {selectedPing.date && (
-                        <Text style={styles.pingDate}>
-                            {new Date(selectedPing.date).toLocaleDateString()}
-                        </Text>
-                    )}
                 </View>
             )}
 
-            {/* Bottom stats bar */}
             <View style={styles.bottomBar}>
                 <View style={styles.bottomStat}>
-                    <Text style={styles.bottomStatValue}>{trail.distance_km} km</Text>
+                    <Text style={styles.bottomStatValue}>
+                        {(() => {
+                            const d = parseFloat(trail.distance_km);
+                            if (isNaN(d)) return "0";
+                            return d > 1000 ? (d / 1000).toFixed(1) : d.toFixed(1);
+                        })()} km
+                    </Text>
                     <Text style={styles.bottomStatLabel}>Distance</Text>
                 </View>
-                <View style={styles.bottomDivider} />
+
                 <View style={styles.bottomStat}>
-                    <Text style={styles.bottomStatValue}>{trail.duration}h</Text>
+                    <Text style={styles.bottomStatValue}>{formatDuration(trail.duration)}</Text>
                     <Text style={styles.bottomStatLabel}>Duration</Text>
                 </View>
-                <View style={styles.bottomDivider} />
+
                 <View style={styles.bottomStat}>
                     <Text style={styles.bottomStatValue}>+{trail.ascent}m</Text>
                     <Text style={styles.bottomStatLabel}>Ascent</Text>
                 </View>
-                <View style={styles.bottomDivider} />
+
                 <View style={styles.bottomStat}>
-                    <Text style={[styles.bottomStatValue, pings.length > 0 && { color: '#f87171' }]}>
-                        {pings.length}
+                    <Text style={[styles.bottomStatValue, currentPings.length > 0 && { color: '#f87171' }]}>
+                        {currentPings.length}
                     </Text>
                     <Text style={styles.bottomStatLabel}>Dangers</Text>
                 </View>
@@ -208,98 +393,41 @@ export default function Mapscreen({ route, navigation }) {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     map: { width, height },
-    loadingContainer: {
-        flex: 1,
-        backgroundColor: '#2d5a3d',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 16,
-    },
-    loadingText: {
-        color: 'rgba(255,255,255,0.7)',
-        fontSize: 15,
-    },
-    topOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        paddingHorizontal: 16,
-        paddingTop: 8,
-        gap: 10,
-    },
-    backBtn: {
-        alignSelf: 'flex-start',
-        backgroundColor: 'rgba(30,58,42,0.9)',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 99,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
-    },
-    backText: { color: 'white', fontSize: 14, fontWeight: '600' },
-    trailPill: {
-        alignSelf: 'center',
-        backgroundColor: 'rgba(30,58,42,0.9)',
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: 99,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.15)',
-    },
-    trailPillName: { color: 'white', fontWeight: '700', fontSize: 15 },
-    trailPillSub: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 2 },
-    pingPopup: {
-        position: 'absolute',
-        bottom: 100,
-        left: 24,
-        right: 24,
-        backgroundColor: 'rgba(30,58,42,0.95)',
-        borderRadius: 16,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(239,68,68,0.4)',
-        gap: 8,
-    },
-    pingPopupHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    pingTypeBadge: {
-        backgroundColor: 'rgba(239,68,68,0.2)',
-        borderRadius: 99,
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderWidth: 1,
-        borderColor: '#f87171',
-    },
-    pingTypeText: { color: '#fca5a5', fontWeight: '700', fontSize: 13 },
-    pingClose: { color: 'rgba(255,255,255,0.5)', fontSize: 18, padding: 4 },
-    pingDesc: { color: 'rgba(255,255,255,0.8)', fontSize: 14 },
-    pingDate: { color: 'rgba(255,255,255,0.4)', fontSize: 12 },
-    bottomBar: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: 'rgba(30,58,42,0.95)',
-        flexDirection: 'row',
-        paddingVertical: 16,
-        paddingHorizontal: 24,
-        paddingBottom: 32,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.1)',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-    },
+    loadingContainer: { flex: 1, backgroundColor: '#2d5a3d', alignItems: 'center', justifyContent: 'center' },
+    topOverlay: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 16, paddingTop: 8, gap: 10 },
+    topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    backBtn: { backgroundColor: 'rgba(30,58,42,0.9)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 99 },
+    backText: { color: 'white', fontWeight: '600' },
+    trailPill: { alignSelf: 'center', backgroundColor: 'rgba(30,58,42,0.9)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 99, alignItems: 'center' },
+    trailPillName: { color: 'white', fontWeight: '700' },
+    trailPillSub: { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
+    syncBanner: { alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 99 },
+    syncBannerText: { color: 'white', fontSize: 12, fontWeight: '600' },
+    pingPopup: { position: 'absolute', bottom: 120, left: 24, right: 24, backgroundColor: 'rgba(30,58,42,0.95)', borderRadius: 16, padding: 16, borderLeftWidth: 4, borderLeftColor: '#f87171' },
+    pingPopupHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    pingTypeBadge: { backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 10, borderRadius: 99 },
+    pingTypeText: { color: '#fca5a5', fontWeight: '700' },
+    pingClose: { color: 'white' },
+    pingDesc: { color: 'white' },
+    bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(30,58,42,0.95)', flexDirection: 'row', paddingVertical: 20, paddingBottom: 40, justifyContent: 'space-around' },
     bottomStat: { alignItems: 'center' },
-    bottomStatValue: { color: 'white', fontSize: 18, fontWeight: '700' },
-    bottomStatLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 2 },
-    bottomDivider: {
-        width: 1,
-        height: 30,
-        backgroundColor: 'rgba(255,255,255,0.15)',
-    },
+    bottomStatValue: { color: 'white', fontSize: 16, fontWeight: '700' },
+    bottomStatLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 11 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 20 },
+    modalContent: { backgroundColor: '#1e3a2a', borderRadius: 20, padding: 25 },
+    modalTitle: { color: 'white', fontSize: 18, fontWeight: '700', marginBottom: 20, textAlign: 'center' },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 15 },
+    chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+    chipActive: { backgroundColor: '#f8c8c8', borderColor: '#f8c8c8' },
+    chipText: { color: 'white' },
+    chipTextActive: { color: '#1e3a2a', fontWeight: '700' },
+    textInput: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 15, color: 'white', marginBottom: 20 },
+    modalButtons: { flexDirection: 'row', gap: 10 },
+    cancelBtn: { flex: 1, alignItems: 'center', padding: 15 },
+    cancelText: { color: 'white', opacity: 0.6 },
+    confirmBtn: { flex: 2, backgroundColor: '#f8c8c8', borderRadius: 12, alignItems: 'center', padding: 15 },
+    confirmText: { color: '#1e3a2a', fontWeight: '700' },
+    offlineBtn: { backgroundColor: 'rgba(30,58,42,0.9)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 99 },
+    offlineBtnActive: { backgroundColor: '#991b1b' },
+    offlineBtnText: { color: 'white', fontSize: 12, fontWeight: '600' },
 });
