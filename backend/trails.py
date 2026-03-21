@@ -85,6 +85,27 @@ def _get_danger_counts() -> dict:
     except Exception:
         return {}
 
+def _get_cover_photos(trail_ids: list) -> dict:
+    """Batch fetch the most recent photo URL per trail. Returns {trail_id: url}."""
+    if not trail_ids:
+        return {}
+    try:
+        resp = (
+            get_supabase().table("trail_photos")
+            .select("trail_id, photo_url")
+            .in_("trail_id", trail_ids)
+            .order("uploaded_at", desc=False)
+            .execute()
+        )
+        covers = {}
+        for row in resp.data or []:
+            tid = row["trail_id"]
+            if tid not in covers:
+                covers[tid] = row["photo_url"]
+        return covers
+    except Exception:
+        return {}
+
 def _get_photos_for_trail(trail_id: str) -> list:
     try:
         resp = (
@@ -142,10 +163,13 @@ async def get_all_trails(
     response      = await run_in_threadpool(_query)
     raw_trails    = response.data or []
     danger_counts = await run_in_threadpool(_get_danger_counts)
+    trail_ids     = [t["id"] for t in raw_trails if t.get("id")]
+    cover_photos  = await run_in_threadpool(lambda: _get_cover_photos(trail_ids))
 
     results = []
     for t in raw_trails:
         trail_out = format_trail(t, danger_counts.get(t["id"], 0))
+        trail_out["cover_photo"] = cover_photos.get(t["id"])
         if lat and lon:
             center = trail_center(t)
             if center:

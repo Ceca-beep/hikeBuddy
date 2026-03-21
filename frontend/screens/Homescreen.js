@@ -8,6 +8,7 @@ import {
     ScrollView,
     Modal,
     SafeAreaView,
+    ImageBackground,
     FlatList,
     ActivityIndicator,
 } from 'react-native';
@@ -190,14 +191,14 @@ export default function HomeScreen({ navigation }) {
         (startDate ? 1 : 0) +
         (selectedFitness !== 'Medium' ? 1 : 0);
 
-    const openTrail = (trail) => {
-        console.log('Opening trail with date:', startDate);
-        navigation?.navigate('TrailDetail', {
-            trail,
-            date:    startDate || null,
-            fitness: selectedFitness,
-        });
-    };
+const openTrail = (trail) => {
+    navigation?.navigate('TrailDetail', {
+        trail,
+        date:       startDate || null,
+        fitness:    selectedFitness,
+        coverImage: trail.cover_photo || null,
+    });
+};
 
     const ChipGroup = ({ label, options, selected, onToggle, single = false, isObjects = false }) => (
         <View style={styles.chipSection}>
@@ -333,14 +334,24 @@ export default function HomeScreen({ navigation }) {
                                 const diffColor = DIFFICULTY_COLORS[item.difficulty] || '#fff';
                                 return (
                                     <TouchableOpacity style={styles.card} activeOpacity={0.9} onPress={() => openTrail(item)}>
-                                        <LinearGradient colors={['#1a3a2a', '#2d5a3d']} style={styles.cardImageArea}>
+                                        <ImageBackground
+                                            source={{ uri: item.cover_photo || 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600' }}
+                                            style={styles.cardImageArea}
+                                        >
+                                        {/* Dark overlay to make the white text readable */}
+                                        <LinearGradient 
+                                            colors={['transparent', 'rgba(0,0,0,0.6)']} 
+                                            style={StyleSheet.absoluteFill} 
+                                        />
+    
                                             <Text style={styles.cardTrailName} numberOfLines={1}>{item.name}</Text>
+                                            
                                             {item.dangers > 0 && (
                                                 <View style={styles.dangerBadge}>
                                                     <Text style={styles.dangerText}>⚠ {item.dangers}</Text>
                                                 </View>
                                             )}
-                                        </LinearGradient>
+                                        </ImageBackground>
                                         <View style={styles.cardBody}>
                                             <View style={styles.cardStatsRow}>
                                                 <View style={styles.cardStats}>
@@ -518,8 +529,8 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 16,
         overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
     },
-    cardImageArea:   { height: 100, justifyContent: 'flex-end', padding: 12, position: 'relative' },
-    cardTrailName:   { color: 'white', fontSize: 20, fontWeight: '800' },
+    cardImageArea:   { height: 160, justifyContent: 'flex-end', padding: 12, position: 'relative' },
+    cardTrailName:   { color: 'white', fontSize: 20, fontWeight: '800', textShadowColor: 'rgba(0, 0, 0, 0.75)', textShadowOffset: { width: -1, height: 1 }, textShadowRadius: 10},
     difficultyBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, borderWidth: 1, marginLeft: 8 },    dangerBadge:     { position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(239,68,68,0.2)', borderRadius: 99, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: '#f87171' },
     dangerText:      { fontSize: 11, color: '#fca5a5', fontWeight: '600' },
     cardBody:        { padding: 14},

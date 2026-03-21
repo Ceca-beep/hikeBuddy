@@ -7,12 +7,14 @@ import {
     ScrollView,
     SafeAreaView,
     ActivityIndicator,
+    ImageBackground,
     Image,
     Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { API_BASE, API_HEADERS } from './Api';
+
 
 const DIFFICULTY_COLORS = {
     Beginner:     '#4ade80',
@@ -50,6 +52,7 @@ export default function TrailDetails({ route, navigation }) {
     const trailParam      = route?.params?.trail   || {};
     const selectedDate    = route?.params?.date    || null;
     const selectedFitness = route?.params?.fitness || 'Medium';
+    const coverImage      = route?.params?.coverImage || null;
 
     const [trail,       setTrail]       = useState(trailParam);
     const [pings,       setPings]       = useState([]);
@@ -143,7 +146,6 @@ export default function TrailDetails({ route, navigation }) {
            if (resp.ok) {
             console.log("DEBUG - Server Response Data:", data);
     
-             // 1. Determine the URL
             const receivedUrl = data.photo_url || data.url; 
             
              if (!receivedUrl) {
@@ -151,15 +153,18 @@ export default function TrailDetails({ route, navigation }) {
              return;
             }
 
-            // 2. Ensure it's a full URL (Add your API_BASE if it's a relative path)
             const fullUrl = receivedUrl.startsWith('http') 
             ? receivedUrl 
             : `${API_BASE}${receivedUrl}`;
 
             console.log("DEBUG - Final URL to Render:", fullUrl);
     
-            // 3. Update state
+            
             setPhotos(prev => [fullUrl, ...prev]);
+
+            if (route.params?.onGoBack) {
+            route.params.onGoBack();
+                 }
             }
            else {
                 Alert.alert('Upload failed', data.detail || 'Could not upload photo.');
@@ -190,21 +195,30 @@ export default function TrailDetails({ route, navigation }) {
                 ) : (
                     <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
 
-                        {/* Hero */}
-                        <LinearGradient colors={['#1a3a2a', '#2d5a3d']} style={styles.heroCard}>
-                            <View style={styles.heroBadgeRow}>
-                                <View style={[styles.diffBadge, { backgroundColor: diffColor + '33', borderColor: diffColor }]}>
-                                    <Text style={[styles.diffText, { color: diffColor }]}>{trail.difficulty}</Text>
+                    {/* Hero with Cover Photo */}
+                        <ImageBackground 
+                            source={{ uri: coverImage || (photos && photos.length > 0 ? photos[0] : 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800') 
+                           }}
+                            style={[styles.heroCard, { padding: 0, overflow: 'hidden' }]}
+                        >
+                            <LinearGradient 
+                                colors={['transparent', 'rgba(26,58,42,0.9)']} 
+                                style={{ flex: 1, padding: 20, justifyContent: 'flex-end' }}
+                            >
+                                <View style={styles.heroBadgeRow}>
+                                    <View style={[styles.diffBadge, { backgroundColor: diffColor + '33', borderColor: diffColor }]}>
+                                        <Text style={[styles.diffText, { color: diffColor }]}>{trail.difficulty}</Text>
+                                    </View>
+                                    <View style={styles.typeBadge}>
+                                        <Text style={styles.typeText}>{trail.user_made ? 'Community trail' : 'Official trail'}</Text>
+                                    </View>
                                 </View>
-                                <View style={styles.typeBadge}>
-                                    <Text style={styles.typeText}>{trail.user_made ? 'Community trail' : 'Official trail'}</Text>
-                                </View>
-                            </View>
-                            <Text style={styles.heroName}>{trail.name}</Text>
-                            {selectedDate && (
-                                <Text style={styles.heroDate}>📅 {formatDate(selectedDate)}</Text>
-                            )}
-                        </LinearGradient>
+                                <Text style={styles.heroName}>{trail.name}</Text>
+                                {selectedDate && (
+                                    <Text style={styles.heroDate}>📅 {formatDate(selectedDate)}</Text>
+                                )}
+                            </LinearGradient>
+                        </ImageBackground>
 
                         {/* Stats */}
                         <View style={styles.statsRow}>
