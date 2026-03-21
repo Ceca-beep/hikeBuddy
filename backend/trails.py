@@ -85,6 +85,19 @@ def _get_danger_counts() -> dict:
     except Exception:
         return {}
 
+def _get_photos_for_trail(trail_id: str) -> list:
+    try:
+        resp = (
+            get_supabase().table("trail_photos")
+            .select("photo_url")
+            .eq("trail_id", trail_id)
+            .order("uploaded_at", desc=True)
+            .execute()
+        )
+        return [r["photo_url"] for r in (resp.data or [])]
+    except Exception:
+        return []
+
 def _get_pings_for_trail(trail_id: str) -> list:
     from datetime import datetime, timezone, timedelta
     supabase = get_supabase()
@@ -186,10 +199,12 @@ async def get_trail_detail_from_api(trail_id: str):
         raise HTTPException(status_code=404, detail="Trail not found")
 
     trail = response.data
-    pings = await run_in_threadpool(lambda: _get_pings_for_trail(trail["id"]))
+    trail_uuid = trail["id"]
+    pings  = await run_in_threadpool(lambda: _get_pings_for_trail(trail_uuid))
+    photos = await run_in_threadpool(lambda: _get_photos_for_trail(trail_uuid))
 
     return {
-        "id":            trail.get("id"),
+        "id":            trail_uuid,
         "osm_id":        trail.get("osm_id"),
         "name":          trail.get("name", ""),
         "difficulty":    map_difficulty(trail.get("difficulty")),
@@ -203,6 +218,7 @@ async def get_trail_detail_from_api(trail_id: str):
         "route_path":    trail.get("route_path"),
         "dangers":       len(pings),
         "pings":         pings,
+        "photos":        photos,
     }
 
 async def submit_trail(trail_data: dict):

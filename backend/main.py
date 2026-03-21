@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from database import get_supabase
@@ -142,6 +142,30 @@ async def get_trails(
 @app.get("/trails/{trail_id}")
 async def get_trail_detail(trail_id: str):
     return await trail_service.get_trail_detail_from_api(trail_id)
+
+@app.post("/trails/{trail_id}/photos")
+async def upload_trail_photo(trail_id: str, file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        ext = (file.filename or "photo.jpg").rsplit(".", 1)[-1].lower()
+        if ext not in ("jpg", "jpeg", "png", "webp", "heic"):
+            ext = "jpg"
+        file_path = f"{trail_id}/{uuid.uuid4()}.{ext}"
+        supabase = get_supabase()
+        supabase.storage.from_("trail_photos").upload(
+            path=file_path,
+            file=contents,
+            file_options={"content-type": file.content_type or "image/jpeg"},
+        )
+        public_url = supabase.storage.from_("trail_photos").get_public_url(file_path)
+        supabase.table("trail_photos").insert({
+            "trail_id":  trail_id,
+            "photo_url": public_url,
+        }).execute()
+        return {"status": "success", "photo_url": public_url}
+    except Exception as e:
+        print(f"Photo upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload photo: {str(e)}")
 
 @app.post("/trails/submit")
 async def submit_trail(trail_data: dict):

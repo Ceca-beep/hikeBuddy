@@ -7,8 +7,11 @@ import {
     ScrollView,
     SafeAreaView,
     ActivityIndicator,
+    Image,
+    Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { API_BASE, API_HEADERS } from './Api';
 
 const DIFFICULTY_COLORS = {
@@ -53,6 +56,8 @@ export default function TrailDetails({ route, navigation }) {
     const [suggestions, setSuggestions] = useState(null);
     const [loading,     setLoading]     = useState(false);
     const [sugLoading,  setSugLoading]  = useState(false);
+    const [photos,      setPhotos]      = useState([]);
+    const [uploading,   setUploading]   = useState(false);
 
     // ── Single effect on mount — fetch trail then suggestions ─────────────────
     useEffect(() => {
@@ -69,6 +74,7 @@ export default function TrailDetails({ route, navigation }) {
                 if (resp.ok) {
                     setTrail(data);
                     setPings(data.pings || []);
+                    setPhotos(data.photos || []);
                     fullTrailId = data.id; // use the UUID from the response
                 }
             } catch (e) {
@@ -101,6 +107,69 @@ export default function TrailDetails({ route, navigation }) {
             }
         })();
     }, []); // runs once on mount
+
+    const pickAndUploadPhoto = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission needed', 'Please allow access to your photo library.');
+            return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [16, 9],
+            quality: 0.7,
+        });
+        if (result.canceled) return;
+        const asset = result.assets[0];
+        const trailUUID = trail.id;
+        if (!trailUUID) {
+            Alert.alert('Error', 'Trail ID not available yet. Please wait a moment.');
+            return;
+        }
+        setUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', {
+                uri:  asset.uri,
+                type: asset.mimeType || 'image/jpeg',
+                name: asset.fileName || 'photo.jpg',
+            });
+            const resp = await fetch(`${API_BASE}/trails/${trailUUID}/photos`, {
+                method: 'POST',
+                body:   formData,
+            });
+            const data = await resp.json();
+           if (resp.ok) {
+            console.log("DEBUG - Server Response Data:", data);
+    
+             // 1. Determine the URL
+            const receivedUrl = data.photo_url || data.url; 
+            
+             if (!receivedUrl) {
+             Alert.alert("Error", "Server success, but no photo_url found in response.");
+             return;
+            }
+
+            // 2. Ensure it's a full URL (Add your API_BASE if it's a relative path)
+            const fullUrl = receivedUrl.startsWith('http') 
+            ? receivedUrl 
+            : `${API_BASE}${receivedUrl}`;
+
+            console.log("DEBUG - Final URL to Render:", fullUrl);
+    
+            // 3. Update state
+            setPhotos(prev => [fullUrl, ...prev]);
+            }
+           else {
+                Alert.alert('Upload failed', data.detail || 'Could not upload photo.');
+            }
+        } catch (e) {
+            Alert.alert('Error', 'Could not upload photo. Check your connection.');
+        } finally {
+            setUploading(false);
+        }
+    };
 
     const gear      = suggestions?.gear || null;
     const localPrep = calcLocalPrep(trail);
@@ -155,6 +224,38 @@ export default function TrailDetails({ route, navigation }) {
                                 <Text style={styles.statValue}>-{trail.descend}m</Text>
                                 <Text style={styles.statLabel}>Descent</Text>
                             </View>
+                        </View>
+
+                        {/* Photos */}
+                        <View style={styles.section}>
+                            <View style={styles.sectionHeaderRow}>
+                                <Text style={styles.sectionTitle}>Photos</Text>
+                                <TouchableOpacity
+                                    style={styles.addPhotoBtn}
+                                    onPress={pickAndUploadPhoto}
+                                    disabled={uploading}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={styles.addPhotoBtnText}>
+                                        {uploading ? 'Uploading...' : '+ Add photo'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                            {photos.length === 0 ? (
+                                <View style={styles.emptyCard}>
+                                    <Text style={styles.emptyText}>No photos yet. Be the first to add one!</Text>
+                                </View>
+                            ) : (
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.photoScrollContent}
+                                >
+                                    {photos.map((url, i) => (
+                                        <Image key={i} source={{ uri: url }} style={styles.photoThumb} onError={(e) => console.log(`Image Load Error for ${url}:`, e.nativeEvent.error)}/> 
+                                    ))}
+                                </ScrollView>
+                            )}
                         </View>
 
                         {/* Weather */}
@@ -399,8 +500,13 @@ const styles = StyleSheet.create({
     statCard:  { flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
     statValue: { color: 'white', fontSize: 16, fontWeight: '700' },
     statLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 2 },
-    section:      { gap: 10 },
-    sectionTitle: { color: 'white', fontSize: 18, fontWeight: '700' },
+    section:          { gap: 10 },
+    sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    sectionTitle:     { color: 'white', fontSize: 18, fontWeight: '700' },
+    addPhotoBtn:      { backgroundColor: 'rgba(248,200,200,0.2)', borderRadius: 99, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(248,200,200,0.5)' },
+    addPhotoBtnText:  { color: '#f8c8c8', fontSize: 13, fontWeight: '600' },
+    photoScrollContent: { gap: 10, paddingVertical: 4 },
+    photoThumb:       { width: 200, height: 130, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.08)' },
     loadingCard:  { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 },
     loadingText:  { color: 'rgba(255,255,255,0.6)', fontSize: 14 },
     weatherCard:         { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 16, gap: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
