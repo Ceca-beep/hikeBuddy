@@ -171,6 +171,64 @@ async def upload_trail_photo(trail_id: str, file: UploadFile = File(...)):
 async def submit_trail(trail_data: dict):
     return await trail_service.submit_trail(trail_data)
 
+# ── Users / Profile ───────────────────────────────────────────────────────────
+
+class UserUpdateJSON(BaseModel):
+    name:       str   = None
+    bio:        str   = None
+    age:        int   = None
+    weight:     float = None
+    height:     float = None
+    sex:        str   = None
+    avatar_url: str   = None
+
+@app.get("/users/{user_id}")
+async def get_user_profile(user_id: str):
+    try:
+        resp = get_supabase().table("users").select("*").eq("id", user_id).single().execute()
+        if not resp.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        return resp.data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/users/{user_id}")
+async def update_user_profile(user_id: str, data: UserUpdateJSON):
+    try:
+        update = {k: v for k, v in data.dict().items() if v is not None}
+        if not update:
+            return {"status": "no changes"}
+        get_supabase().table("users").update(update).eq("id", user_id).execute()
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/users/{user_id}/avatar")
+async def upload_user_avatar(user_id: str, file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        ext = (file.filename or "avatar.jpg").rsplit(".", 1)[-1].lower()
+        if ext not in ("jpg", "jpeg", "png", "webp"):
+            ext = "jpg"
+        file_path = f"{user_id}/avatar.{ext}"
+        supabase = get_supabase()
+        try:
+            supabase.storage.from_("avatars").remove([file_path])
+        except Exception:
+            pass
+        supabase.storage.from_("avatars").upload(
+            path=file_path,
+            file=contents,
+            file_options={"content-type": file.content_type or "image/jpeg"},
+        )
+        public_url = supabase.storage.from_("avatars").get_public_url(file_path)
+        supabase.table("users").update({"avatar_url": public_url}).eq("id", user_id).execute()
+        return {"status": "success", "avatar_url": public_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ── Suggestions ───────────────────────────────────────────────────────────────
 
 @app.get("/suggestions/{trail_id}")

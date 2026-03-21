@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE, API_HEADERS } from './Api';
 
 
@@ -484,7 +485,29 @@ export default function TrailDetails({ route, navigation }) {
                     <TouchableOpacity
                         style={styles.startBtn}
                         activeOpacity={0.9}
-                        onPress={() => navigation.navigate('Mapscreen', { trail, pings })}
+                        onPress={async () => {
+                            try {
+                                const existing = await AsyncStorage.getItem('hike_history');
+                                const history = existing ? JSON.parse(existing) : [];
+                                const alreadyExists = history.some(h => (h.id === trail.id) || (h.osm_id === trail.osm_id));
+                                if (!alreadyExists) {
+                                    history.push({
+                                        id:          trail.id,
+                                        osm_id:      trail.osm_id,
+                                        name:        trail.name,
+                                        difficulty:  trail.difficulty,
+                                        distance_km: trail.distance_km,
+                                        duration:    trail.duration,
+                                        ascent:      trail.ascent,
+                                        started_at:  new Date().toISOString(),
+                                    });
+                                    await AsyncStorage.setItem('hike_history', JSON.stringify(history));
+                                }
+                            } catch (e) {
+                                console.warn('Hike history save error:', e);
+                            }
+                            navigation.navigate('Mapscreen', { trail, pings });
+                        }}
                     >
                         <Text style={styles.startBtnText}>Start Hike</Text>
                     </TouchableOpacity>

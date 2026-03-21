@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function LoginScreen({ navigation }) {
     const [email, setEmail] = useState('');
@@ -35,6 +36,12 @@ export default function LoginScreen({ navigation }) {
             });
             const data = await response.json();
             if (response.ok) {
+                const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+                await AsyncStorage.setItem('user', JSON.stringify({
+                    id:    data.user.id,
+                    name:  data.user.name,
+                    email: data.user.email,
+                }));
                 navigation?.navigate('Home');
             } else {
                 alert(data.message || 'Login failed');

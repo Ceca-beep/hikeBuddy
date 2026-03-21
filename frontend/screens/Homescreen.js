@@ -236,9 +236,9 @@ const openTrail = (trail) => {
                     <View>
                         <Text style={styles.headerTitle}>Where are we hiking?</Text>
                     </View>
-                    <View style={styles.avatarCircle}>
+                    <TouchableOpacity style={styles.avatarCircle} onPress={() => navigation?.navigate('Profile')} activeOpacity={0.8}>
                         <Text style={styles.avatarText}>HB</Text>
-                    </View>
+                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.searchRow}>

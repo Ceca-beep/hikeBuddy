@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 
 const { width, height } = Dimensions.get('window');
 
@@ -104,6 +105,16 @@ export default function Mapscreen({ route, navigation }) {
         setLoading(false);
         loadQueueCount();
     }, [trail.route_path]);
+
+    // Auto-flush queued pings when real connectivity is restored
+    useEffect(() => {
+        const unsubscribe = NetInfo.addEventListener(state => {
+            if (state.isConnected && !simulateOffline) {
+                flushQueue();
+            }
+        });
+        return () => unsubscribe();
+    }, [simulateOffline]);
 
     const loadQueueCount = async () => {
         const raw = await AsyncStorage.getItem(QUEUE_KEY);
@@ -247,10 +258,11 @@ export default function Mapscreen({ route, navigation }) {
     // Returns the colored banner shown below the trail pill when offline or syncing
     const renderSyncBanner = () => {
         if (!simulateOffline && queueCount === 0) return null;
-        let bgColor = '#4b5563', text = `Offline Mode · ${queueCount} queued`;
-        if (syncStatus === 'syncing') { bgColor = '#b45309'; text = `Syncing ${queueCount} pings...`; }
+        const pingWord = queueCount === 1 ? 'ping' : 'pings';
+        let bgColor = '#4b5563', text = `Offline Mode: ${queueCount} ${pingWord} queued`;
+        if (syncStatus === 'syncing') { bgColor = '#b45309'; text = `Syncing ${queueCount} ${pingWord}...`; }
         else if (syncStatus === 'synced') { bgColor = '#15803d'; text = '✓ All pings synced!'; }
-        else if (queueCount > 0 && !simulateOffline) { bgColor = '#991b1b'; text = `Connection issue · ${queueCount} pings waiting`; }
+        else if (queueCount > 0 && !simulateOffline) { bgColor = '#991b1b'; text = `Connection issue: ${queueCount} ${pingWord} waiting`; }
         return (
             <View style={[styles.syncBanner, { backgroundColor: bgColor }]}>
                 <Text style={styles.syncBannerText}>{text}</Text>
