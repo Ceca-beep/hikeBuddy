@@ -13,12 +13,12 @@ import {
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
+import { API_BASE } from './Api';
 
 const { width, height } = Dimensions.get('window');
 
 // AsyncStorage key used to persist pings that couldn't be sent while offline
 const QUEUE_KEY = 'pending_pings';
-const API_URL = 'https://summarisable-subarticulative-queenie.ngrok-free.dev/pings';
 
 // Converts a GeoJSON route (LineString or MultiLineString) into arrays of { latitude, longitude } that react-native-maps Polyline can render directly.
 // GeoJSON stores coordinates as [lng, lat], so we swap them here.
@@ -162,7 +162,7 @@ export default function Mapscreen({ route, navigation }) {
         const failed = [];
         for (const payload of queue) {
             try {
-                const res = await fetch(API_URL, {
+                const res = await fetch(`${API_BASE}/pings`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -200,6 +200,10 @@ export default function Mapscreen({ route, navigation }) {
     };
     // Builds the ping payload and either sends it to the server or queues it if offline
     const submitNewPing = async () => {
+        if (!dangerType) {
+            alert('Please select a danger type first.');
+            return;
+        }
         const payload = {
             "type": dangerType === 'Custom' ? 'Danger' : dangerType,
             "lat": tempPing.latitude,
@@ -220,7 +224,7 @@ export default function Mapscreen({ route, navigation }) {
         }
 
         try {
-            const res = await fetch(API_URL, {
+            const res = await fetch(`${API_BASE}/pings`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -239,6 +243,8 @@ export default function Mapscreen({ route, navigation }) {
                 }
                 alert('Danger reported!');
             } else {
+                const errMsg = result?.detail || result?.message || `Server error ${res.status}`;
+                alert(`Ping failed: ${errMsg}`);
                 await saveToQueue(payload);
                 setCurrentPings(prev => [...prev, { ...payload, id: `temp-${Date.now()}` }]);
                 setSyncStatus('offline');

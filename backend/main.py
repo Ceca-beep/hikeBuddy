@@ -93,6 +93,7 @@ class PingJSON(BaseModel):
 async def create_ping(data: PingJSON):
     try:
         ping_payload = {
+            "id":          str(uuid.uuid4()),
             "type":        data.type,
             "lat":         data.lat,
             "lng":         data.lng,
@@ -105,7 +106,7 @@ async def create_ping(data: PingJSON):
         return {"status": "success", "message": "Ping recorded", "data": response.data}
     except Exception as e:
         print(f"Ping Error: {e}")
-        raise HTTPException(status_code=400, detail="Failed to record ping.")
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/pings")
 async def get_pings(trail_id: str = None):
