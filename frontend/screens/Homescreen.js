@@ -7,11 +7,11 @@ import {
     StyleSheet,
     ScrollView,
     Modal,
-    SafeAreaView,
     ImageBackground,
     FlatList,
     ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Calendar } from 'react-native-calendars';
 import { API_BASE, API_HEADERS } from './Api';

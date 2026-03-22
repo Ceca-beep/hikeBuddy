@@ -4,12 +4,12 @@ import {
     Text,
     TouchableOpacity,
     StyleSheet,
-    SafeAreaView,
     Dimensions,
     ActivityIndicator,
     Modal,
     TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
