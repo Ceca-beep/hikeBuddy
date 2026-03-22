@@ -63,15 +63,6 @@ export default function LoginScreen({ navigation }) {
             >
                 <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
 
-                    {/* Header */}
-                    <View style={styles.header}>
-                        <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
-                            <MaterialIcons name="arrow-back" size={24} color="white" />
-                        </TouchableOpacity>
-                        <Text style={styles.headerTitle}>HikeBuddy</Text>
-                        <View style={{ width: 48 }} />
-                    </View>
-
                     {/* Logo */}
                     <View style={styles.logoSection}>
                         <View style={styles.logoCircle}>
@@ -128,11 +119,6 @@ export default function LoginScreen({ navigation }) {
                             <Text style={styles.buttonText}>LOG IN</Text>
                         </TouchableOpacity>
                     </View>
-
-                    {/*Skip button to go straight to home without logging in*/}
-                    <TouchableOpacity onPress={() => navigation?.navigate('Home')}>
-                        <Text style={styles.skipText}>Skip for now</Text>
-                    </TouchableOpacity>
 
                     {/* Footer with link to sign up */}
                     <View style={styles.footer}>

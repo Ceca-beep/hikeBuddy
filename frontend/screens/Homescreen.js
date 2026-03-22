@@ -398,7 +398,6 @@ const openTrail = (trail) => {
                                 {/* Date */}
                                 <View style={styles.chipSection}>
                                     <Text style={styles.chipSectionLabel}>Hike date</Text>
-                                    <Text style={styles.dateHint}>Used for weather forecasts and gear suggestions.</Text>
                                     {pendingStart ? (
                                         <Text style={styles.dateSelectedText}>
                                             {formatDate(pendingStart)}{pendingEnd ? ` → ${formatDate(pendingEnd)}` : ''}

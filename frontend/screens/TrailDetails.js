@@ -77,7 +77,8 @@ export default function TrailDetails({ route, navigation }) {
                 const data = await resp.json();
                 if (resp.ok) {
                     setTrail(data);
-                    setPings(data.pings || []);
+                    const uniquePings = Array.from(new Map((data.pings || []).map(p => [p.id, p])).values());
+                    setPings(uniquePings);
                     setPhotos(data.photos || []);
                     fullTrailId = data.id; // use the UUID from the response
                 }
