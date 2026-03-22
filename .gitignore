@@ -6,11 +6,19 @@
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
+
+# Files
+backend/venv/
+backend/.venv/
+backend/__pycache__/
+*.pyc
+.env
 # Editor-based HTTP Client requests
 /httpRequests/
 # Dependencies
 node_modules/
 .expo/
+
 
 # IDE Settings
 .idea/
