@@ -2,8 +2,6 @@
 
 HikeBuddy is a mobile app that helps beginner hikers before and during their hiking experience. It provides trail, food, and water quantity recommendations based on each user's personal characteristics (age, weight, sex) and the hike they choose. It also features real-time danger alerts reported by other hikers or weather forecasts, gear suggestions, and live trail tracking.
 
-> Where every step tells a story.
-
 ## Authentication 
 > ### You can create an account or log in to an existing one
   
